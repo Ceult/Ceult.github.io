@@ -8,7 +8,7 @@
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
   <style>
-    /* ===== 样式与之前一致，略作精简 ===== */
+    /* ===== 样式（与之前一致） ===== */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root { --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d; --text: #c9d1d9; --text2: #8b949e; --accent: #58a6ff; --accent2: #238636; --danger: #f85149; --warn: #f0883e; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; -webkit-tap-highlight-color: transparent; }
@@ -86,7 +86,7 @@
       .preview-pane { display: none; }
       .preview-pane.show { display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--bg); border: none; }
     }
-    /* CodeMirror 暗色主题（自包含） */
+    /* CodeMirror 暗色主题（通过 theme 实现，与 defaultHighlightStyle 配合） */
     .cm-editor { background: var(--bg) !important; height: 100% !important; }
     .cm-gutters { background: var(--bg2) !important; border-right: 1px solid var(--border) !important; }
     .cm-lineNumbers { color: var(--text2) !important; }
@@ -208,14 +208,13 @@
   import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightSpecialChars } from "https://cdn.jsdelivr.net/npm/@codemirror/view@6.36.4/+esm";
   import { EditorState, Compartment } from "https://cdn.jsdelivr.net/npm/@codemirror/state@6.5.2/+esm";
   import { defaultKeymap, history, historyKeymap, indentWithTab } from "https://cdn.jsdelivr.net/npm/@codemirror/commands@6.8.0/+esm";
-  import { bracketMatching, syntaxHighlighting, HighlightStyle, indentOnInput } from "https://cdn.jsdelivr.net/npm/@codemirror/language@6.10.8/+esm";
+  import { bracketMatching, indentOnInput, defaultHighlightStyle } from "https://cdn.jsdelivr.net/npm/@codemirror/language@6.10.8/+esm";
   import { markdown } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-markdown@6.3.2/+esm";
   import { html } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-html@6.4.9/+esm";
   import { javascript } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-javascript@6.2.3/+esm";
   import { css } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-css@6.3.1/+esm";
   import { searchKeymap, highlightSelectionMatches } from "https://cdn.jsdelivr.net/npm/@codemirror/search@6.5.9/+esm";
   import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from "https://cdn.jsdelivr.net/npm/@codemirror/autocomplete@6.18.6/+esm";
-  import { tags } from "https://cdn.jsdelivr.net/npm/@lezer/highlight@1.2.1/+esm";
 
   const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
 
@@ -406,32 +405,6 @@ function hello() {
 </body>
 </html>`;
 
-  // ========== 自定义高亮样式 ==========
-  const customHighlightStyle = HighlightStyle.define([
-    { tag: tags.keyword, color: '#ff7b72' },
-    { tag: tags.operator, color: '#d2a8ff' },
-    { tag: tags.typeName, color: '#ffa657' },
-    { tag: tags.string, color: '#a5d6ff' },
-    { tag: tags.number, color: '#79c0ff' },
-    { tag: tags.comment, color: '#8b949e', fontStyle: 'italic' },
-    { tag: tags.variableName, color: '#e6edf3' },
-    { tag: tags.propertyName, color: '#d2a8ff' },
-    { tag: tags.function(tags.variableName), color: '#d2a8ff' },
-    { tag: tags.tagName, color: '#7ee787' },
-    { tag: tags.attributeName, color: '#d2a8ff' },
-    { tag: tags.attributeValue, color: '#a5d6ff' },
-    { tag: tags.heading, color: '#58a6ff', fontWeight: 'bold' },
-    { tag: tags.link, color: '#a5d6ff', textDecoration: 'underline' },
-    { tag: tags.emphasis, fontStyle: 'italic' },
-    { tag: tags.strong, fontWeight: 'bold' },
-    { tag: tags.strikethrough, textDecoration: 'line-through' },
-    { tag: tags.list, color: '#e6edf3' },
-    { tag: tags.quote, color: '#8b949e', fontStyle: 'italic' },
-    { tag: tags.meta, color: '#8b949e' },
-    { tag: tags.monospace, color: '#a5d6ff', fontFamily: 'monospace' },
-    { tag: tags.invalid, color: '#f85149' },
-  ]);
-
   // ========== 语言扩展 ==========
   function getLanguageExtension(filename) {
     if (filename.endsWith('.md') || filename.endsWith('.markdown')) return markdown();
@@ -441,7 +414,7 @@ function hello() {
     return markdown();
   }
 
-  // ========== CodeMirror 编辑器工厂 ==========
+  // ========== CodeMirror 编辑器工厂（使用 defaultHighlightStyle，无自定义高亮） ==========
   function createEditor(container, content, filename, onChange) {
     const languageComp = new Compartment();
     const extensions = [
@@ -451,10 +424,10 @@ function hello() {
       keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, indentWithTab]),
       languageComp.of(getLanguageExtension(filename)),
       EditorState.tabSize.of(2),
-      syntaxHighlighting(customHighlightStyle),
+      defaultHighlightStyle, // 使用内置高亮样式，无需额外依赖
       EditorView.updateListener.of((update) => { if (update.docChanged) onChange(update.state.doc.toString()); }),
       EditorView.theme({
-        '&': { height: '100%', backgroundColor: '#0d1117' },
+        '&': { height: '100%', backgroundColor: '#0d1117', color: '#c9d1d9' },
         '.cm-scroller': { fontFamily: '"SF Mono", Monaco, monospace', fontSize: '14px', lineHeight: '1.6' },
         '.cm-gutters': { backgroundColor: '#161b22', borderRight: '1px solid #30363d', color: '#8b949e' },
         '.cm-activeLineGutter': { backgroundColor: '#21262d' },
@@ -489,7 +462,7 @@ function hello() {
       const sidebarOpen = ref(false);
       const loading = ref(false);
       const toasts = ref([]);
-      const editorType = ref('codemirror'); // 不再使用 Monaco
+      const editorType = ref('codemirror');
       const tree = ref([]);
       const searchQuery = ref('');
       const filteredTree = ref([]);
@@ -498,7 +471,7 @@ function hello() {
       const fileContents = ref(new Map());
       const originalContents = ref(new Map());
       const editorContainer = ref(null);
-      let cmView = null; // CodeMirror 视图实例
+      let cmView = null;
       const newFileModal = ref(false), newFileName = ref(''), newFileTemplate = ref('html-basic'), newFileWithMarkdown = ref(true);
       const deleteConfirm = ref(null), renameModal = ref(null), renameValue = ref('');
       const showPreview = ref(false);
@@ -549,7 +522,6 @@ function hello() {
       function buildTree(items, depth = 0) { return items.map(item => ({ name: item.name, path: item.path, type: item.type, sha: item.sha, depth, expanded: false, hidden: false, children: item.type === 'dir' ? [] : null })).sort((a, b) => { if (a.type !== b.type) return a.type === 'dir' ? -1 : 1; return a.name.localeCompare(b.name); }); }
       function updateFilteredTree() { const query = searchQuery.value.toLowerCase().trim(); if (!query) { filteredTree.value = tree.value; return; } function filterItems(items) { return items.reduce((acc, item) => { const matches = item.name.toLowerCase().includes(query); let childMatches = []; if (item.children && item.children.length) childMatches = filterItems(item.children); if (matches || childMatches.length) { const copy = { ...item, children: childMatches.length ? childMatches : (item.children || null) }; if (matches && item.children && !childMatches.length) copy.children = []; acc.push(copy); } return acc; }, []); } filteredTree.value = filterItems(tree.value); }
 
-      // ---------- 打开文件 ----------
       async function openFile(item) {
         if (!api.value) { toast('未配置GitHub', 'error'); showSettings.value = true; return; }
         if (item.type === 'dir') {
@@ -569,7 +541,6 @@ function hello() {
           return;
         }
 
-        // 文件：如果尚未在 tabs 中，则加载内容
         if (!tabs.value.find(t => t.path === item.path)) {
           loading.value = true;
           try {
@@ -581,45 +552,31 @@ function hello() {
             toast('加载文件失败: ' + e.message, 'error');
             loading.value = false;
             return;
-          } finally {
-            // 注意：这里不能直接关闭 loading，因为后面还要执行 initEditor，
-            // 但 initEditor 是同步的，所以在 initEditor 完成后关闭 loading。
-            // 但为了保险，我们在 initEditor 完成后统一关闭。
           }
         }
 
         activePath.value = item.path;
         if (isMobile.value) sidebarOpen.value = false;
         await nextTick();
-        // 初始化编辑器
         try {
           initEditor(item.path);
         } catch (e) {
           toast('编辑器初始化失败: ' + e.message, 'error');
         } finally {
-          loading.value = false; // 确保无论如何都会关闭 loading
+          loading.value = false;
         }
       }
 
-      // ---------- 初始化编辑器（纯 CodeMirror） ----------
       function initEditor(path) {
         const container = editorContainer.value;
-        if (!container) {
-          toast('编辑器容器未就绪', 'error');
-          return;
-        }
+        if (!container) { toast('编辑器容器未就绪', 'error'); return; }
         const content = fileContents.value.get(path) || '';
         const filename = path.split('/').pop();
 
-        // 销毁旧编辑器
-        if (cmView) {
-          cmView.destroy();
-          cmView = null;
-        }
-        container.innerHTML = ''; // 清空容器
+        if (cmView) { cmView.destroy(); cmView = null; }
+        container.innerHTML = '';
 
         try {
-          // 创建 CodeMirror 编辑器
           cmView = createEditor(container, content, filename, (val) => {
             fileContents.value.set(path, val);
             const tab = tabs.value.find(t => t.path === path);
@@ -628,7 +585,6 @@ function hello() {
           editorType.value = 'codemirror';
         } catch (err) {
           console.error('CodeMirror init error:', err);
-          // 降级为纯文本域
           container.innerHTML = `<textarea class="fallback-textarea" spellcheck="false">${content}</textarea>`;
           const textarea = container.querySelector('textarea');
           textarea.addEventListener('input', () => {
@@ -645,13 +601,7 @@ function hello() {
       function switchTab(path) {
         if (activePath.value === path) return;
         activePath.value = path;
-        nextTick(() => {
-          try {
-            initEditor(path);
-          } catch (e) {
-            toast('切换编辑器失败: ' + e.message, 'error');
-          }
-        });
+        nextTick(() => { try { initEditor(path); } catch (e) { toast('切换编辑器失败: ' + e.message, 'error'); } });
       }
 
       function closeTab(path) {
@@ -665,14 +615,12 @@ function hello() {
           if (activePath.value) {
             nextTick(() => initEditor(activePath.value));
           } else {
-            // 无 tab 时销毁编辑器
             if (cmView) { cmView.destroy(); cmView = null; }
             editorContainer.value.innerHTML = '';
           }
         }
       }
 
-      // ---------- 保存（含冲突处理） ----------
       async function saveCurrent() {
         if (!canSave.value) return;
         const tab = tabs.value.find(t => t.path === activePath.value);
@@ -691,13 +639,11 @@ function hello() {
             toast('保存成功');
           } catch (err) {
             if (err.message && (err.message.includes('sha') || err.message.includes('does not match'))) {
-              // 获取远程最新版本
               let fileInfo;
               try {
                 fileInfo = await api.value.getFile(activePath.value);
               } catch (e) {
                 if (e.message.includes('404') || e.message.includes('Not Found')) {
-                  // 文件不存在，创建
                   await api.value.createFile(activePath.value, content);
                   originalContents.value.set(activePath.value, content);
                   tab.unsaved = false;
@@ -737,7 +683,6 @@ function hello() {
         }
       }
 
-      // ---------- 新建文件 ----------
       function showNewFileModal() { if (!api.value) { showSettings.value = true; toast('请先配置 GitHub 仓库', 'warn'); return; } newFileName.value = ''; newFileTemplate.value = 'html-basic'; newFileWithMarkdown.value = true; newFileModal.value = true; }
       async function createNewFile() {
         const name = newFileName.value.trim();
@@ -751,9 +696,7 @@ function hello() {
           else content = `<!DOCTYPE html><html><head><title>${opts.title}</title></head><body></body></html>`;
         } else if (name.endsWith('.md')) {
           content = `# ${name.replace('.md', '')}\n\n开始书写你的文章...\n\n## 二级标题\n\n- 列表项\n- 示例 **加粗**\n\n\`\`\`javascript\nconsole.log("Hello Markdown");\n\`\`\``;
-        } else {
-          content = '';
-        }
+        } else { content = ''; }
         loading.value = true;
         try {
           await api.value.createFile(path, content);
@@ -773,7 +716,6 @@ function hello() {
         }
       }
 
-      // ---------- 删除 & 重命名 ----------
       function confirmDelete(item) { deleteConfirm.value = item; }
       async function doDelete() {
         if (!deleteConfirm.value) return;
@@ -827,9 +769,7 @@ function hello() {
         return 'Plain Text';
       }
       function toggleSidebar() { sidebarOpen.value = !sidebarOpen.value; }
-      function onResize() {
-        if (cmView) cmView.requestMeasure();
-      }
+      function onResize() { if (cmView) cmView.requestMeasure(); }
       function handleGlobalSave(e) {
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
           e.preventDefault();
