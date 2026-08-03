@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>bbb</title>
+  <\/script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <link rel="stylesheet" href="">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; }
+    .container { max-width: 720px; margin: 0 auto; padding: 40px 20px; }
+    .article { background: #fff; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .article-header { margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid #eee; }
+    .article-title { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+    .article-meta { color: #888; font-size: 14px; }
+    .markdown-body { font-size: 16px; line-height: 1.8; }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: 24px 0 16px; }
+    .markdown-body p { margin-bottom: 16px; }
+    .markdown-body pre { background: #f6f8fa; padding: 16px; border-radius: 8px; overflow-x: auto; }
+    .markdown-body code { background: #f6f8fa; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+    .markdown-body blockquote { border-left: 4px solid #ddd; padding-left: 16px; color: #666; margin: 16px 0; }
+    .markdown-body ul, .markdown-body ol { margin: 16px 0; padding-left: 24px; }
+    .markdown-body img { max-width: 100%; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="container">
+      <article class="article">
+        <header class="article-header">
+          <h1 class="article-title">bbb</h1>
+          <div class="article-meta">{{ date }}</div>
+        </header>
+        <markdown>
+  <pre>
+# 开始写作
+
+在这里写下你的 Markdown 内容...
+
+## 二级标题
+
+- 列表项一
+- 列表项二
+- 列表项三
+
+> 这是一段引用
+
+```javascript
+// 代码示例
+function hello() {
+  console.log("Hello, World!");
+}
+```
+
+**粗体文字** 和 *斜体文字*
+
+[链接文本](https://example.com)
+  </pre>
+</markdown>
+      </article>
+    </div>
+  </div>
+  <\/script src=""></script>
+  <\/script>
+    (function() {
+      let worker = null, workerId = 0;
+      const callbacks = new Map();
+      function getWorker() {
+        if (!worker) {
+          const code = `importScripts('https://cdn.jsdelivr.net/npm/markdown-it@14/dist/markdown-it.min.js');
+            const md = markdownit({ html: true, linkify: true, typographer: true });
+            self.onmessage = function(e) { const { id, content } = e.data; self.postMessage({ id, html: md.render(content) }); };`;
+          worker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+          worker.onmessage = function(e) { const cb = callbacks.get(e.data.id); if (cb) { cb(e.data.html); callbacks.delete(e.data.id); } };
+        }
+        return worker;
+      }
+      function renderMarkdown(content, cb) { const id = ++workerId; callbacks.set(id, cb); getWorker().postMessage({ id, content }); }
+      function dedent(str) { const lines = str.split('\n'); const min = lines.filter(l => l.trim()).map(l => l.match(/^s*/)[0].length).reduce((a,b)=>Math.min(a,b),Infinity); return lines.map(l=>l.slice(min)).join('\n').trim(); }
+      const Markdown = {
+        template: '<div class="markdown-body" v-html="renderedHtml"></div>',
+        data() { return { renderedHtml: '' }; },
+        mounted() { const raw = this.extractContent(); renderMarkdown(dedent(raw), html => this.renderedHtml = html); },
+        methods: { extractContent() { const slot = this.$slots.default?.(); if (!slot) return ''; const pre = slot.find(v=>v.type==='pre'); if (!pre) return ''; const extract = (nodes) => { if (typeof nodes === 'string') return nodes; if (Array.isArray(nodes)) return nodes.map(extract).join(''); if (nodes.children) return extract(nodes.children); return ''; }; return extract(pre.children); } }
+      };
+      const { createApp } = Vue;
+      createApp({ components: { markdown: Markdown }, data() { return { date: new Date().toLocaleDateString('zh-CN') }; } }).mount('#app');
+    })();
+  </script>
+</body>
+</html>
