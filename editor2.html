@@ -8,7 +8,6 @@
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
   <style>
-    /* ===== 样式（与之前一致） ===== */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root { --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d; --text: #c9d1d9; --text2: #8b949e; --accent: #58a6ff; --accent2: #238636; --danger: #f85149; --warn: #f0883e; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; -webkit-tap-highlight-color: transparent; }
@@ -86,7 +85,6 @@
       .preview-pane { display: none; }
       .preview-pane.show { display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--bg); border: none; }
     }
-    /* CodeMirror 暗色主题（通过 theme 实现，与 defaultHighlightStyle 配合） */
     .cm-editor { background: var(--bg) !important; height: 100% !important; }
     .cm-gutters { background: var(--bg2) !important; border-right: 1px solid var(--border) !important; }
     .cm-lineNumbers { color: var(--text2) !important; }
@@ -103,7 +101,6 @@
 </head>
 <body>
 <div id="app">
-  <!-- 头部 -->
   <div class="header">
     <button class="btn small" @click="toggleSidebar" v-if="isMobile">☰</button>
     <h1>✍️ Posts Editor</h1>
@@ -114,9 +111,7 @@
     <button class="btn primary" @click="saveCurrent" :disabled="!canSave">💾 保存</button>
   </div>
 
-  <!-- 主体 -->
   <div class="main">
-    <!-- 侧边栏 -->
     <div class="sidebar" :class="{'mobile-hidden': isMobile && !sidebarOpen}">
       <div class="sidebar-header">
         <h2>📂 文件树</h2>
@@ -132,7 +127,6 @@
     </div>
     <div v-if="isMobile && sidebarOpen" class="mobile-overlay" @click="sidebarOpen=false"></div>
 
-    <!-- 编辑器区域 -->
     <div class="editor-area">
       <div class="editor-tabs" v-if="tabs.length">
         <div v-for="tab in tabs" :key="tab.path" class="tab" :class="{active: tab.path===activePath}" @click="switchTab(tab.path)">
@@ -154,10 +148,8 @@
     </div>
   </div>
 
-  <!-- 加载遮罩 -->
   <div v-if="loading" class="loading-overlay"><div class="loading-spinner"></div></div>
 
-  <!-- 设置面板 -->
   <div v-if="showSettings" class="settings-panel">
     <div class="settings-box">
       <h2>⚙️ GitHub 设置</h2>
@@ -174,7 +166,6 @@
     </div>
   </div>
 
-  <!-- 新建文件 -->
   <div v-if="newFileModal" class="modal-overlay">
     <div class="modal-box">
       <h3>📄 新建文件</h3>
@@ -187,24 +178,18 @@
     </div>
   </div>
 
-  <!-- 删除确认 -->
   <div v-if="deleteConfirm" class="modal-overlay">
     <div class="modal-box"><h3>🗑️ 确认删除</h3><div class="modal-body">确定要删除 <strong>{{deleteConfirm.name}}</strong> 吗？此操作不可撤销。</div><div class="modal-actions"><button class="btn" @click="deleteConfirm=null">取消</button><button class="btn danger" @click="doDelete">删除</button></div></div>
   </div>
 
-  <!-- 重命名 -->
   <div v-if="renameModal" class="modal-overlay">
     <div class="modal-box"><h3>✏️ 重命名</h3><div class="modal-body"><div class="field"><label>新名称</label><input v-model="renameValue" @keyup.enter="doRename"></div></div><div class="modal-actions"><button class="btn" @click="renameModal=null">取消</button><button class="btn primary" @click="doRename">重命名</button></div></div>
   </div>
 
-  <!-- Toast -->
   <div class="toast-container"><div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">{{t.message}}</div></div>
 </div>
 
 <script type="module">
-  // ============================================================
-  // 1. 导入 CodeMirror 及扩展（全部使用固定版本，稳定可靠）
-  // ============================================================
   import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightSpecialChars } from "https://cdn.jsdelivr.net/npm/@codemirror/view@6.36.4/+esm";
   import { EditorState, Compartment } from "https://cdn.jsdelivr.net/npm/@codemirror/state@6.5.2/+esm";
   import { defaultKeymap, history, historyKeymap, indentWithTab } from "https://cdn.jsdelivr.net/npm/@codemirror/commands@6.8.0/+esm";
@@ -218,17 +203,26 @@
 
   const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
 
-  // ========== 工具函数：带超时的 fetch ==========
+  // ========== 增强版 fetchWithTimeout（使用 Promise.race 更可靠） ==========
   async function fetchWithTimeout(url, options, timeout = 10000) {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
+    const signal = controller.signal;
+
+    const fetchPromise = fetch(url, { ...options, signal });
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        controller.abort();
+        reject(new Error('请求超时，请检查网络或仓库设置'));
+      }, timeout);
+    });
+
     try {
-      const response = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(id);
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
       return response;
     } catch (err) {
-      clearTimeout(id);
-      if (err.name === 'AbortError') throw new Error('请求超时，请检查网络或仓库设置');
+      if (err.name === 'AbortError') {
+        throw new Error('请求超时，请检查网络或仓库设置');
+      }
       throw err;
     }
   }
@@ -254,7 +248,7 @@
     async deleteFile(path, sha, message) { return this.request(`${this.base}/contents/${path}`, { method: 'DELETE', body: JSON.stringify({ message: message || `Delete ${path}`, sha, branch: this.branch }) }); }
   }
 
-  // ========== HTML 模板（基础 & 博客） ==========
+  // ========== HTML 模板（同上，略） ==========
   const HTML_TEMPLATE_BASIC = (opts = {}) => `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -414,7 +408,7 @@ function hello() {
     return markdown();
   }
 
-  // ========== CodeMirror 编辑器工厂（使用 defaultHighlightStyle，无自定义高亮） ==========
+  // ========== CodeMirror 编辑器工厂 ==========
   function createEditor(container, content, filename, onChange) {
     const languageComp = new Compartment();
     const extensions = [
@@ -424,7 +418,7 @@ function hello() {
       keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, indentWithTab]),
       languageComp.of(getLanguageExtension(filename)),
       EditorState.tabSize.of(2),
-      defaultHighlightStyle, // 使用内置高亮样式，无需额外依赖
+      defaultHighlightStyle,
       EditorView.updateListener.of((update) => { if (update.docChanged) onChange(update.state.doc.toString()); }),
       EditorView.theme({
         '&': { height: '100%', backgroundColor: '#0d1117', color: '#c9d1d9' },
@@ -503,22 +497,42 @@ function hello() {
         if (api.value) { await refreshTree(); } else { toast('配置不完整，请填写 Token / Owner / Repo', 'error'); }
         toast('设置已保存');
       }
+
+      // ===== 增强版 refreshTree（带超时保护） =====
       async function refreshTree() {
-        if (!api.value) { toast('请先在设置中配置 GitHub 仓库', 'warn'); showSettings.value = true; loading.value = false; return; }
+        if (!api.value) {
+          toast('请先在设置中配置 GitHub 仓库', 'warn');
+          showSettings.value = true;
+          loading.value = false;
+          return;
+        }
         loading.value = true;
+
+        // 额外超时保护：12秒后强制关闭 loading
+        const guard = setTimeout(() => {
+          if (loading.value) {
+            loading.value = false;
+            toast('加载超时，请检查网络或仓库设置', 'error');
+          }
+        }, 12000);
+
         try {
           const data = await api.value.getContents(settings.value.postsPath);
+          clearTimeout(guard);
           tree.value = buildTree(data, 0);
           updateFilteredTree();
           toast('文件树已刷新');
         } catch (e) {
+          clearTimeout(guard);
           toast('加载失败: ' + e.message, 'error');
           tree.value = [];
           filteredTree.value = [];
         } finally {
           loading.value = false;
+          clearTimeout(guard);
         }
       }
+
       function buildTree(items, depth = 0) { return items.map(item => ({ name: item.name, path: item.path, type: item.type, sha: item.sha, depth, expanded: false, hidden: false, children: item.type === 'dir' ? [] : null })).sort((a, b) => { if (a.type !== b.type) return a.type === 'dir' ? -1 : 1; return a.name.localeCompare(b.name); }); }
       function updateFilteredTree() { const query = searchQuery.value.toLowerCase().trim(); if (!query) { filteredTree.value = tree.value; return; } function filterItems(items) { return items.reduce((acc, item) => { const matches = item.name.toLowerCase().includes(query); let childMatches = []; if (item.children && item.children.length) childMatches = filterItems(item.children); if (matches || childMatches.length) { const copy = { ...item, children: childMatches.length ? childMatches : (item.children || null) }; if (matches && item.children && !childMatches.length) copy.children = []; acc.push(copy); } return acc; }, []); } filteredTree.value = filterItems(tree.value); }
 
