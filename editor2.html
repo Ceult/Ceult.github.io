@@ -3,16 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Posts Editor · 专业文章编辑器</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext x='0' y='12' fill='%2358a6ff'%3E📝%3C/text%3E%3C/svg%3E">
+  <title>Posts Editor</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root { --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d; --text: #c9d1d9; --text2: #8b949e; --accent: #58a6ff; --accent2: #238636; --danger: #f85149; --warn: #f0883e; }
+    :root {
+      --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d;
+      --text: #c9d1d9; --text2: #8b949e; --accent: #58a6ff;
+      --accent2: #238636; --danger: #f85149; --warn: #f0883e;
+    }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; -webkit-tap-highlight-color: transparent; }
     #app { height: 100vh; display: flex; flex-direction: column; }
-    .header { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .header { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; min-height: 44px; }
     .header h1 { font-size: 16px; font-weight: 600; }
     .header .spacer { flex: 1; }
     .btn { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: 13px; cursor: pointer; transition: all 0.2s; white-space: nowrap; touch-action: manipulation; }
@@ -49,17 +51,18 @@
     .tree-item .actions { display: none; gap: 4px; }
     .tree-item:hover .actions { display: flex; }
     .tree-item .actions .btn-icon { padding: 2px 4px; font-size: 11px; border: none; background: transparent; color: inherit; cursor: pointer; opacity: 0.7; }
-    .editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    .editor-tabs { display: flex; background: var(--bg2); border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 12px; }
+    .editor-tabs { display: flex; background: var(--bg2); border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; min-height: 38px; }
     .tab { padding: 8px 16px; font-size: 13px; cursor: pointer; border-right: 1px solid var(--border); white-space: nowrap; display: flex; align-items: center; gap: 6px; user-select: none; }
     .tab.active { background: var(--bg); border-bottom: 2px solid var(--accent); }
     .tab .close { font-size: 14px; opacity: 0.5; padding: 0 2px; }
     .tab .unsaved { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-    .editor-content { flex: 1; display: flex; overflow: hidden; }
+    .editor-content { flex: 1; display: flex; overflow: hidden; padding-right: 12px; }
     .code-pane, .preview-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .code-pane { width: 100%; }
     .preview-pane { border-left: 1px solid var(--border); }
     .pane-label { padding: 6px 12px; font-size: 11px; color: var(--text2); background: var(--bg2); border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
-    .editor-container { flex: 1; overflow: hidden; position: relative; }
+    .editor-container { flex: 1; overflow: hidden; position: relative; min-height: 0; }
     .preview-frame { flex: 1; border: none; background: #fff; width: 100%; height: 100%; }
     .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text2); gap: 12px; }
     .mobile-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 40; }
@@ -74,7 +77,7 @@
     .modal-box h3 { padding: 16px 20px; font-size: 15px; border-bottom: 1px solid var(--border); }
     .modal-body { padding: 16px 20px; }
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px 16px; }
-    .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 150; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+    .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 150; display: flex; align-items: center; justify-content: center; }
     .loading-spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 768px) {
@@ -83,9 +86,11 @@
       .header h1 { font-size: 14px; }
       .btn { padding: 5px 10px; font-size: 12px; }
       .preview-pane { display: none; }
-      .preview-pane.show { display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--bg); border: none; }
+      .editor-content { padding-right: 0; }
+      .editor-area { padding-bottom: 0; }
+      .preview-pane.show { display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 30; border: none; }
     }
-    .cm-editor { background: var(--bg) !important; height: 100% !important; }
+    .cm-editor { background: var(--bg) !important; }
     .cm-gutters { background: var(--bg2) !important; border-right: 1px solid var(--border) !important; }
     .cm-lineNumbers { color: var(--text2) !important; }
     .cm-activeLineGutter { background: var(--bg3) !important; }
@@ -96,166 +101,157 @@
     .cm-tooltip-autocomplete { background: var(--bg2) !important; }
     .cm-completionLabel { color: var(--text) !important; }
     .cm-completionDetail { color: var(--text2) !important; }
-    .fallback-textarea { width: 100%; height: 100%; background: var(--bg); color: var(--text); border: none; padding: 16px; font-family: 'SF Mono', Monaco, monospace; font-size: 14px; resize: none; outline: none; }
   </style>
 </head>
 <body>
-<div id="app">
-  <div class="header">
-    <button class="btn small" @click="toggleSidebar" v-if="isMobile">☰</button>
-    <h1>✍️ Posts Editor</h1>
-    <span class="spacer"></span>
-    <span v-if="settings.owner" style="font-size:12px;color:var(--text2)">{{settings.owner}}/{{settings.repo}}@{{settings.branch}}</span>
-    <span v-if="editorType" style="font-size:11px;color:var(--accent);padding:4px 8px;border:1px solid var(--border);border-radius:4px">{{editorType === 'monaco' ? 'Monaco' : 'CodeMirror'}}</span>
-    <button class="btn" @click="showSettings=true">⚙️ 设置</button>
-    <button class="btn primary" @click="saveCurrent" :disabled="!canSave">💾 保存</button>
-  </div>
-
-  <div class="main">
-    <div class="sidebar" :class="{'mobile-hidden': isMobile && !sidebarOpen}">
-      <div class="sidebar-header">
-        <h2>📂 文件树</h2>
-        <button class="btn small" @click="showNewFileModal">+ 新建</button>
-        <button class="btn small" @click="refreshTree" :disabled="loading">🔄</button>
-      </div>
-      <div class="file-search"><input v-model="searchQuery" placeholder="🔍 搜索文件..." @input="updateFilteredTree"></div>
-      <div class="file-tree" v-if="filteredTree.length">
-        <tree-item v-for="item in filteredTree" :key="item.path" :item="item" :active-path="activePath" @open="openFile" @delete="confirmDelete" @rename="showRenameModal"/>
-      </div>
-      <div v-else-if="loading" class="empty-state"><div>加载中...</div></div>
-      <div v-else class="empty-state"><div>{{searchQuery ? '无匹配文件' : '暂无文件'}}</div><button v-if="!searchQuery" class="btn" @click="showSettings=true">配置仓库</button></div>
+  <div id="app">
+    <div class="header">
+      <button class="btn small" @click="toggleSidebar" v-if="isMobile">☰</button>
+      
+      <span class="spacer"></span>
+      <span v-if="settings.owner" style="font-size:12px;color:var(--text2)">{{settings.owner}}/{{settings.repo}}@{{settings.branch}}</span>
+      <span v-if="editorType" style="font-size:11px;color:var(--accent);padding:4px 8px;border:1px solid var(--border);border-radius:4px">{{editorType === 'monaco' ? 'Monaco' : 'CodeMirror'}}</span>
+      <button class="btn" @click="showSettings=true">⚙️ 设置</button>
+      <button class="btn primary" @click="saveCurrent" :disabled="!canSave">💾 保存</button>
     </div>
-    <div v-if="isMobile && sidebarOpen" class="mobile-overlay" @click="sidebarOpen=false"></div>
-
-    <div class="editor-area">
-      <div class="editor-tabs" v-if="tabs.length">
-        <div v-for="tab in tabs" :key="tab.path" class="tab" :class="{active: tab.path===activePath}" @click="switchTab(tab.path)">
-          <span>{{tab.name}}</span><span v-if="tab.unsaved" class="unsaved"></span><span class="close" @click.stop="closeTab(tab.path)">×</span>
+    <div class="main">
+      <div class="sidebar" :class="{'mobile-hidden': isMobile && !sidebarOpen}">
+        <div class="sidebar-header">
+          <h2>📂 文件树</h2>
+          <button class="btn small" @click="showNewFileModal">+ 新建</button>
+          <button class="btn small" @click="refreshTree" :disabled="loading">🔄</button>
         </div>
-        <button v-if="isMobile && (isHtmlFile(activePath) || isMarkdownFile(activePath))" class="btn small" @click="showPreview=!showPreview" style="margin-left:auto">{{showPreview ? '✏️ 编辑' : '👁️ 预览'}}</button>
-      </div>
-      <div v-if="!activePath" class="empty-state"><div class="icon">📝</div><div>选择一个文件开始编辑</div></div>
-      <div v-else class="editor-content">
-        <div class="code-pane">
-          <div class="pane-label"><span>编辑器</span><span style="font-size:11px;color:var(--text2)">{{getLanguageLabel(activePath)}}</span></div>
-          <div ref="editorContainer" class="editor-container"></div>
+        <div class="file-search"><input v-model="searchQuery" placeholder="🔍 搜索文件..." @input="filterTree"></div>
+        <div class="file-tree" v-if="filteredTree.length">
+          <tree-item v-for="item in filteredTree" :key="item.path" :item="item" :active-path="activePath" @open="openFile" @delete="confirmDelete" @rename="showRenameModal"/>
         </div>
-        <div class="preview-pane" :class="{'show': showPreview}">
-          <div class="pane-label"><span>预览</span><button v-if="isMobile" class="btn small" @click="showPreview=false">✕</button></div>
-          <iframe class="preview-frame" :srcdoc="previewHtml" sandbox="allow-same-origin allow-scripts allow-popups allow-forms" title="preview"></iframe>
+        <div v-else-if="loading" class="empty-state"><div>加载中...</div></div>
+        <div v-else class="empty-state"><div>{{searchQuery ? '无匹配文件' : '暂无文件'}}</div><button v-if="!searchQuery" class="btn" @click="showSettings=true">配置仓库</button></div>
+      </div>
+      <div v-if="isMobile && sidebarOpen" class="mobile-overlay" @click="sidebarOpen=false"></div>
+      <div class="editor-area">
+        <div class="editor-tabs" v-if="tabs.length">
+          <div v-for="tab in tabs" :key="tab.path" class="tab" :class="{active: tab.path===activePath}" @click="switchTab(tab.path)">
+            <span>{{tab.name}}</span><span v-if="tab.unsaved" class="unsaved"></span><span class="close" @click.stop="closeTab(tab.path)">×</span>
+          </div>
+          <button v-if="isMobile && isHtmlFile(activePath)" class="btn small" @click="showPreview=!showPreview" style="margin-left:auto">{{showPreview ? '✏️ 编辑' : '👁️ 预览'}}</button>
+        </div>
+        <div v-if="!activePath" class="empty-state"><div class="icon">📝</div><div>选择一个文件开始编辑</div></div>
+        <div v-else class="editor-content">
+          <div class="code-pane">
+            <div class="pane-label"><span>编辑器</span><span style="font-size:11px;color:var(--text2)">{{getLanguageLabel(activePath)}}</span></div>
+            <div ref="editorContainer" class="editor-container"></div>
+          </div>
+          <div class="preview-pane" :class="{'show': showPreview}">
+            <div class="pane-label"><span>预览</span><button v-if="isMobile" class="btn small" @click="showPreview=false">✕</button></div>
+            <iframe class="preview-frame" :srcdoc="previewHtml" sandbox="allow-scripts"></iframe>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-
-  <div v-if="loading" class="loading-overlay"><div class="loading-spinner"></div></div>
-
-  <div v-if="showSettings" class="settings-panel">
-    <div class="settings-box">
-      <h2>⚙️ GitHub 设置</h2>
-      <div class="settings-body">
-        <div class="field"><label>Personal Access Token</label><input v-model="settings.token" type="password" placeholder="ghp_xxxxxxxxxxxx"><div class="hint">需要 repo 权限的 Fine-grained Token</div></div>
-        <div class="field"><label>仓库所有者 (Owner)</label><input v-model="settings.owner" placeholder="username"></div>
-        <div class="field"><label>仓库名 (Repo)</label><input v-model="settings.repo" placeholder="my-blog"></div>
-        <div class="field"><label>分支 (Branch)</label><input v-model="settings.branch" placeholder="main"></div>
-        <div class="field"><label>Posts 目录路径</label><input v-model="settings.postsPath" placeholder="posts"></div>
-        <div class="field"><label>自定义 CSS URL (可选)</label><input v-model="settings.customCss" placeholder="https://.../style.css"></div>
-        <div class="field"><label>自定义 JS URL (可选)</label><input v-model="settings.customJs" placeholder="https://.../main.js"></div>
+    <div v-if="loading" class="loading-overlay"><div class="loading-spinner"></div></div>
+    <div v-if="showSettings" class="settings-panel">
+      <div class="settings-box">
+        <h2>⚙️ GitHub 设置</h2>
+        <div class="settings-body">
+          <div class="field"><label>Personal Access Token</label><input v-model="settings.token" type="password" placeholder="ghp_xxxxxxxxxxxx"><div class="hint">需要 repo 权限的 Fine-grained Token</div></div>
+          <div class="field"><label>仓库所有者 (Owner)</label><input v-model="settings.owner" placeholder="username"></div>
+          <div class="field"><label>仓库名 (Repo)</label><input v-model="settings.repo" placeholder="my-blog"></div>
+          <div class="field"><label>分支 (Branch)</label><input v-model="settings.branch" placeholder="main"></div>
+          <div class="field"><label>Posts 目录路径</label><input v-model="settings.postsPath" placeholder="posts"></div>
+          <div class="field"><label>自定义 CSS URL (可选)</label><input v-model="settings.customCss" placeholder="https://.../style.css"></div>
+          <div class="field"><label>自定义 JS URL (可选)</label><input v-model="settings.customJs" placeholder="https://.../main.js"></div>
+        </div>
+        <div class="settings-actions"><button class="btn" @click="showSettings=false">取消</button><button class="btn primary" @click="saveSettings">保存并连接</button></div>
       </div>
-      <div class="settings-actions"><button class="btn" @click="closeSettingsWithoutRefresh">取消</button><button class="btn primary" @click="saveSettings">保存并连接</button></div>
     </div>
-  </div>
-
-  <div v-if="newFileModal" class="modal-overlay">
-    <div class="modal-box">
-      <h3>📄 新建文件</h3>
-      <div class="modal-body">
-        <div class="field"><label>文件名</label><input v-model="newFileName" placeholder="hello.md 或 article.html"></div>
-        <div class="field" v-if="newFileName.endsWith('.html')"><label>模板</label><select v-model="newFileTemplate"><option value="html-basic">基础 HTML (含 Vue + markdown-it)</option><option value="html-blog">博客文章模板</option><option value="html-empty">空白 HTML</option></select></div>
-        <div class="field" v-if="newFileName.endsWith('.html') && newFileTemplate!=='html-empty'"><label><input type="checkbox" v-model="newFileWithMarkdown"> 包含 &lt;markdown&gt; 示例</label></div>
+    <div v-if="newFileModal" class="modal-overlay">
+      <div class="modal-box">
+        <h3>📄 新建文件</h3>
+        <div class="modal-body">
+          <div class="field"><label>文件名</label><input v-model="newFileName" placeholder="hello.md 或 article.html"></div>
+          <div class="field" v-if="newFileName.endsWith('.html')"><label>模板</label><select v-model="newFileTemplate"><option value="html-basic">基础 HTML (含 Vue + markdown-it)</option><option value="html-blog">博客文章模板</option><option value="html-empty">空白 HTML</option></select></div>
+          <div class="field" v-if="newFileName.endsWith('.html') && newFileTemplate!=='html-empty'"><label><input type="checkbox" v-model="newFileWithMarkdown"> 包含 &lt;markdown&gt; 示例</label></div>
+        </div>
+        <div class="modal-actions"><button class="btn" @click="newFileModal=false">取消</button><button class="btn primary" @click="createNewFile" :disabled="!newFileName.trim()">创建</button></div>
       </div>
-      <div class="modal-actions"><button class="btn" @click="newFileModal=false">取消</button><button class="btn primary" @click="createNewFile" :disabled="!newFileName.trim()">创建</button></div>
     </div>
+    <div v-if="deleteConfirm" class="modal-overlay">
+      <div class="modal-box"><h3>🗑️ 确认删除</h3><div class="modal-body">确定要删除 <strong>{{deleteConfirm.name}}</strong> 吗？此操作不可撤销。</div><div class="modal-actions"><button class="btn" @click="deleteConfirm=null">取消</button><button class="btn danger" @click="doDelete">删除</button></div></div>
+    </div>
+    <div v-if="renameModal" class="modal-overlay">
+      <div class="modal-box"><h3>✏️ 重命名</h3><div class="modal-body"><div class="field"><label>新名称</label><input v-model="renameValue" @keyup.enter="doRename"></div></div><div class="modal-actions"><button class="btn" @click="renameModal=null">取消</button><button class="btn primary" @click="doRename">重命名</button></div></div>
+    </div>
+    <div class="toast-container"><div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">{{t.message}}</div></div>
   </div>
 
-  <div v-if="deleteConfirm" class="modal-overlay">
-    <div class="modal-box"><h3>🗑️ 确认删除</h3><div class="modal-body">确定要删除 <strong>{{deleteConfirm.name}}</strong> 吗？此操作不可撤销。</div><div class="modal-actions"><button class="btn" @click="deleteConfirm=null">取消</button><button class="btn danger" @click="doDelete">删除</button></div></div>
-  </div>
+  <script type="module">
+    const stateMod = await import("https://esm.sh/@codemirror/state@6.5.2");
+    const viewMod = await import("https://esm.sh/@codemirror/view@6.36.4?deps=@codemirror/state@6.5.2");
+    const commandsMod = await import("https://esm.sh/@codemirror/commands@6.8.0?deps=@codemirror/state@6.5.2,@codemirror/view@6.36.4");
+    const languageMod = await import("https://esm.sh/@codemirror/language@6.10.8?deps=@codemirror/state@6.5.2,@codemirror/view@6.36.4");
+    const markdownMod = await import("https://esm.sh/@codemirror/lang-markdown@6.3.2?deps=@codemirror/state@6.5.2,@codemirror/view@6.36.4,@codemirror/language@6.10.8");
+    const htmlMod = await import("https://esm.sh/@codemirror/lang-html@6.4.9?deps=@codemirror/state@6.5.2,@codemirror/view@6.36.4,@codemirror/language@6.10.8");
+    const jsMod = await import("https://esm.sh/@codemirror/lang-javascript@6.2.3?deps=@codemirror/state@6.5.2,@codemirror/view@6.36.4,@codemirror/language@6.10.8");
+    const cssMod = await import("https://esm.sh/@codemirror/lang-css@6.3.1?deps=@codemirror/state@6.5.2,@codemirror/view@6.36.4,@codemirror/language@6.10.8");
+    const themeMod = await import("https://esm.sh/@codemirror/theme-one-dark@6.1.3?deps=@codemirror/state@6.5.2,@codemirror/view@6.36.4");
+    const searchMod = await import("https://esm.sh/@codemirror/search@6.5.9?deps=@codemirror/state@6.5.2,@codemirror/view@6.36.4");
+    const autocompleteMod = await import("https://esm.sh/@codemirror/autocomplete@6.18.6?deps=@codemirror/state@6.5.2,@codemirror/view@6.36.4,@codemirror/language@6.10.8");
+    const highlightMod = await import("https://esm.sh/@lezer/highlight@1.2.1?deps=@codemirror/state@6.5.2");
 
-  <div v-if="renameModal" class="modal-overlay">
-    <div class="modal-box"><h3>✏️ 重命名</h3><div class="modal-body"><div class="field"><label>新名称</label><input v-model="renameValue" @keyup.enter="doRename"></div></div><div class="modal-actions"><button class="btn" @click="renameModal=null">取消</button><button class="btn primary" @click="doRename">重命名</button></div></div>
-  </div>
+    const { EditorState, Compartment } = stateMod;
+    const { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightSpecialChars } = viewMod;
+    const { defaultKeymap, history, historyKeymap, indentWithTab } = commandsMod;
+    const { bracketMatching, syntaxHighlighting, HighlightStyle, indentOnInput } = languageMod;
+    const { markdown } = markdownMod;
+    const { html } = htmlMod;
+    const { javascript } = jsMod;
+    const { css } = cssMod;
+    const { oneDark } = themeMod;
+    const { searchKeymap, highlightSelectionMatches } = searchMod;
+    const { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } = autocompleteMod;
+    const { tags } = highlightMod;
+    const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
 
-  <div class="toast-container"><div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">{{t.message}}</div></div>
-</div>
-
-<script type="module">
-  import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightSpecialChars } from "https://cdn.jsdelivr.net/npm/@codemirror/view@6.36.4/+esm";
-  import { EditorState, Compartment } from "https://cdn.jsdelivr.net/npm/@codemirror/state@6.5.2/+esm";
-  import { defaultKeymap, history, historyKeymap, indentWithTab } from "https://cdn.jsdelivr.net/npm/@codemirror/commands@6.8.0/+esm";
-  import { bracketMatching, indentOnInput, defaultHighlightStyle } from "https://cdn.jsdelivr.net/npm/@codemirror/language@6.10.8/+esm";
-  import { markdown } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-markdown@6.3.2/+esm";
-  import { html } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-html@6.4.9/+esm";
-  import { javascript } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-javascript@6.2.3/+esm";
-  import { css } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-css@6.3.1/+esm";
-  import { searchKeymap, highlightSelectionMatches } from "https://cdn.jsdelivr.net/npm/@codemirror/search@6.5.9/+esm";
-  import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from "https://cdn.jsdelivr.net/npm/@codemirror/autocomplete@6.18.6/+esm";
-
-  const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
-
-  // ========== 增强版 fetchWithTimeout（使用 Promise.race 更可靠） ==========
-  async function fetchWithTimeout(url, options, timeout = 10000) {
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    const fetchPromise = fetch(url, { ...options, signal });
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        controller.abort();
-        reject(new Error('请求超时，请检查网络或仓库设置'));
-      }, timeout);
-    });
-
-    try {
-      const response = await Promise.race([fetchPromise, timeoutPromise]);
-      return response;
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        throw new Error('请求超时，请检查网络或仓库设置');
+    class GitHubAPI {
+      constructor(token, owner, repo, branch) {
+        this.token = token; this.owner = owner; this.repo = repo; this.branch = branch || 'main';
+        this.base = `https://api.github.com/repos/${owner}/${repo}`;
       }
-      throw err;
+      _utf8ToBase64(str) {
+        const bytes = new TextEncoder().encode(str); let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        return btoa(binary);
+      }
+      _base64ToUtf8(base64) {
+        const binary = atob(base64); const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return new TextDecoder().decode(bytes);
+      }
+      headers() { return { 'Authorization': `token ${this.token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' }; }
+      async request(url, opts = {}) {
+        const res = await fetch(url, { ...opts, headers: { ...this.headers(), ...opts.headers } });
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || `HTTP ${res.status}`); }
+        return res.status === 204 ? null : res.json();
+      }
+      async getContents(path) { return this.request(`${this.base}/contents/${path}?ref=${this.branch}`); }
+      async getFile(path) {
+        const data = await this.getContents(path);
+        if (Array.isArray(data)) throw new Error('Path is a directory');
+        return { ...data, content: this._base64ToUtf8(data.content.replace(/\s/g, '')) };
+      }
+      async createFile(path, content, message) { return this.request(`${this.base}/contents/${path}`, { method: 'PUT', body: JSON.stringify({ message: message || `Create ${path}`, content: this._utf8ToBase64(content), branch: this.branch }) }); }
+      async updateFile(path, content, sha, message) { return this.request(`${this.base}/contents/${path}`, { method: 'PUT', body: JSON.stringify({ message: message || `Update ${path}`, content: this._utf8ToBase64(content), sha, branch: this.branch }) }); }
+      async deleteFile(path, sha, message) { return this.request(`${this.base}/contents/${path}`, { method: 'DELETE', body: JSON.stringify({ message: message || `Delete ${path}`, sha, branch: this.branch }) }); }
     }
-  }
 
-  // ========== GitHub API 封装 ==========
-  class GitHubAPI {
-    constructor(token, owner, repo, branch) {
-      this.token = token; this.owner = owner; this.repo = repo; this.branch = branch || 'main';
-      this.base = `https://api.github.com/repos/${owner}/${repo}`;
-    }
-    _utf8ToBase64(str) { const bytes = new TextEncoder().encode(str); let binary = ''; for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]); return btoa(binary); }
-    _base64ToUtf8(base64) { const binary = atob(base64); const bytes = new Uint8Array(binary.length); for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i); return new TextDecoder().decode(bytes); }
-    headers() { return { 'Authorization': `token ${this.token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' }; }
-    async request(url, opts = {}) {
-      const res = await fetchWithTimeout(url, { ...opts, headers: { ...this.headers(), ...opts.headers } }, 10000);
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || `HTTP ${res.status}`); }
-      return res.status === 204 ? null : res.json();
-    }
-    async getContents(path) { return this.request(`${this.base}/contents/${path}?ref=${this.branch}`); }
-    async getFile(path) { const data = await this.getContents(path); if (Array.isArray(data)) throw new Error('Path is a directory'); return { ...data, content: this._base64ToUtf8(data.content.replace(/\s/g, '')) }; }
-    async createFile(path, content, message) { return this.request(`${this.base}/contents/${path}`, { method: 'PUT', body: JSON.stringify({ message: message || `Create ${path}`, content: this._utf8ToBase64(content), branch: this.branch }) }); }
-    async updateFile(path, content, sha, message) { return this.request(`${this.base}/contents/${path}`, { method: 'PUT', body: JSON.stringify({ message: message || `Update ${path}`, content: this._utf8ToBase64(content), sha, branch: this.branch }) }); }
-    async deleteFile(path, sha, message) { return this.request(`${this.base}/contents/${path}`, { method: 'DELETE', body: JSON.stringify({ message: message || `Delete ${path}`, sha, branch: this.branch }) }); }
-  }
-
-  // ========== HTML 模板（同上，略） ==========
-  const HTML_TEMPLATE_BASIC = (opts = {}) => `<!DOCTYPE html>
+    const HTML_TEMPLATE_BASIC = (opts = {}) => `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${opts.title || 'New Page'}</title>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.js"><\/script>
+  <\\/script src="https://unpkg.com/vue@3/dist/vue.global.js"><\/script>
   <link rel="stylesheet" href="${opts.customCss || ''}">
   <style>body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }</style>
 </head>
@@ -277,8 +273,8 @@ const hello = "world";
   </pre>
 </markdown>` : '<p>开始编辑你的内容...</p>'}
   </div>
-  <script src="${opts.customJs || ''}"><\/script>
-  <script>
+  <\\/script src="${opts.customJs || ''}"><\/script>
+  <\\/script>
     (function() {
       let worker = null, workerId = 0;
       const callbacks = new Map();
@@ -306,13 +302,14 @@ const hello = "world";
   <\/script>
 </body>
 </html>`;
-  const HTML_TEMPLATE_BLOG = (opts = {}) => `<!DOCTYPE html>
+
+    const HTML_TEMPLATE_BLOG = (opts = {}) => `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${opts.title || 'Blog Post'}</title>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.js"><\/script>
+  <\\/script src="https://unpkg.com/vue@3/dist/vue.global.js"><\/script>
   <link rel="stylesheet" href="${opts.customCss || ''}">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -369,8 +366,8 @@ function hello() {
       </article>
     </div>
   </div>
-  <script src="${opts.customJs || ''}"><\/script>
-  <script>
+  <\\/script src="${opts.customJs || ''}"><\/script>
+  <\\/script>
     (function() {
       let worker = null, workerId = 0;
       const callbacks = new Map();
@@ -399,424 +396,195 @@ function hello() {
 </body>
 </html>`;
 
-  // ========== 语言扩展 ==========
-  function getLanguageExtension(filename) {
-    if (filename.endsWith('.md') || filename.endsWith('.markdown')) return markdown();
-    if (filename.endsWith('.html') || filename.endsWith('.htm')) return html();
-    if (filename.endsWith('.js') || filename.endsWith('.ts') || filename.endsWith('.jsx') || filename.endsWith('.tsx')) return javascript();
-    if (filename.endsWith('.css') || filename.endsWith('.scss') || filename.endsWith('.less')) return css();
-    return markdown();
-  }
+    const customHighlightStyle = HighlightStyle.define([
+      { tag: tags.keyword, color: '#ff7b72' }, { tag: tags.operator, color: '#d2a8ff' }, { tag: tags.typeName, color: '#ffa657' },
+      { tag: tags.string, color: '#a5d6ff' }, { tag: tags.number, color: '#79c0ff' }, { tag: tags.comment, color: '#8b949e', fontStyle: 'italic' },
+      { tag: tags.variableName, color: '#e6edf3' }, { tag: tags.propertyName, color: '#d2a8ff' }, { tag: tags.function(tags.variableName), color: '#d2a8ff' },
+      { tag: tags.tagName, color: '#7ee787' }, { tag: tags.attributeName, color: '#d2a8ff' }, { tag: tags.attributeValue, color: '#a5d6ff' },
+      { tag: tags.heading, color: '#58a6ff', fontWeight: 'bold' }, { tag: tags.link, color: '#a5d6ff', textDecoration: 'underline' },
+      { tag: tags.emphasis, fontStyle: 'italic' }, { tag: tags.strong, fontWeight: 'bold' }, { tag: tags.strikethrough, textDecoration: 'line-through' },
+      { tag: tags.list, color: '#e6edf3' }, { tag: tags.quote, color: '#8b949e', fontStyle: 'italic' },
+      { tag: tags.meta, color: '#8b949e' }, { tag: tags.monospace, color: '#a5d6ff', fontFamily: 'monospace' }, { tag: tags.invalid, color: '#f85149' },
+    ]);
 
-  // ========== CodeMirror 编辑器工厂 ==========
-  function createEditor(container, content, filename, onChange) {
-    const languageComp = new Compartment();
-    const extensions = [
-      lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), drawSelection(), dropCursor(),
-      rectangularSelection(), crosshairCursor(), highlightSpecialChars(), history(), bracketMatching(),
-      indentOnInput(), closeBrackets(), autocompletion(), highlightSelectionMatches(),
-      keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, indentWithTab]),
-      languageComp.of(getLanguageExtension(filename)),
-      EditorState.tabSize.of(2),
-      defaultHighlightStyle,
-      EditorView.updateListener.of((update) => { if (update.docChanged) onChange(update.state.doc.toString()); }),
-      EditorView.theme({
-        '&': { height: '100%', backgroundColor: '#0d1117', color: '#c9d1d9' },
-        '.cm-scroller': { fontFamily: '"SF Mono", Monaco, monospace', fontSize: '14px', lineHeight: '1.6' },
-        '.cm-gutters': { backgroundColor: '#161b22', borderRight: '1px solid #30363d', color: '#8b949e' },
-        '.cm-activeLineGutter': { backgroundColor: '#21262d' },
-        '.cm-activeLine': { backgroundColor: 'rgba(88, 166, 255, 0.05)' },
-        '.cm-selectionBackground': { backgroundColor: 'rgba(88, 166, 255, 0.2)' },
-        '.cm-cursor': { borderLeftColor: '#58a6ff' },
-        '.cm-tooltip': { backgroundColor: '#161b22', borderColor: '#30363d' },
-        '.cm-tooltip-autocomplete': { backgroundColor: '#161b22' },
-        '.cm-completionLabel': { color: '#c9d1d9' },
-        '.cm-completionDetail': { color: '#8b949e' },
-      })
-    ];
-    const view = new EditorView({ state: EditorState.create({ doc: content, extensions }), parent: container });
-    return view;
-  }
-
-  // ========== 树节点组件 ==========
-  const TreeItem = {
-    props: ['item', 'activePath'], emits: ['open', 'delete', 'rename'],
-    template: `<div><div class="tree-item" :class="{active: item.path===activePath, hidden: item.hidden}" :style="{'--depth': item.depth}" @click="item.type==='dir' ? toggle() : $emit('open', item)"><span class="icon">{{ item.type==='dir' ? (item.expanded ? '📂' : '📁') : getFileIcon(item.name) }}</span><span class="name">{{item.name}}</span><span class="actions" v-if="item.type!=='dir'" @click.stop><button class="btn-icon" @click="$emit('rename', item)">✏️</button><button class="btn-icon" @click="$emit('delete', item)">🗑️</button></span></div><div v-if="item.expanded && item.children"><tree-item v-for="child in item.children" :key="child.path" :item="child" :active-path="activePath" @open="$emit('open', $event)" @delete="$emit('delete', $event)" @rename="$emit('rename', $event)"/></div></div>`,
-    setup(props) { const toggle = () => { props.item.expanded = !props.item.expanded; }; const getFileIcon = (name) => { if (name.endsWith('.md')) return '📝'; if (name.endsWith('.html')) return '🌐'; if (name.endsWith('.css')) return '🎨'; if (name.endsWith('.js')) return '⚡'; return '📄'; }; return { toggle, getFileIcon }; }
-  };
-
-  // ========== Vue 应用 ==========
-  createApp({
-    components: { TreeItem },
-    setup() {
-      const settings = ref({ token: localStorage.getItem('gh_token') || '', owner: localStorage.getItem('gh_owner') || '', repo: localStorage.getItem('gh_repo') || '', branch: localStorage.getItem('gh_branch') || 'main', postsPath: localStorage.getItem('gh_postsPath') || 'posts', customCss: localStorage.getItem('gh_customCss') || '', customJs: localStorage.getItem('gh_customJs') || '' });
-      const showSettings = ref(false);
-      const api = ref(null);
-      const isMobile = ref(window.innerWidth <= 768);
-      const sidebarOpen = ref(false);
-      const loading = ref(false);
-      const toasts = ref([]);
-      const editorType = ref('codemirror');
-      const tree = ref([]);
-      const searchQuery = ref('');
-      const filteredTree = ref([]);
-      const tabs = ref([]);
-      const activePath = ref('');
-      const fileContents = ref(new Map());
-      const originalContents = ref(new Map());
-      const editorContainer = ref(null);
-      let cmView = null;
-      const newFileModal = ref(false), newFileName = ref(''), newFileTemplate = ref('html-basic'), newFileWithMarkdown = ref(true);
-      const deleteConfirm = ref(null), renameModal = ref(null), renameValue = ref('');
-      const showPreview = ref(false);
-
-      const isMarkdownFile = (path) => path && (path.endsWith('.md') || path.endsWith('.markdown'));
-      const isHtmlFile = (path) => path && path.endsWith('.html');
-      const previewHtml = computed(() => {
-        if (!activePath.value) return '';
-        const content = fileContents.value.get(activePath.value) || '';
-        if (isHtmlFile(activePath.value)) return content;
-        if (isMarkdownFile(activePath.value) && window.markdownit) {
-          const md = window.markdownit({ html: true, linkify: true, typographer: true, breaks: true });
-          const rendered = md.render(content);
-          const customCSS = settings.value.customCss ? `<link rel="stylesheet" href="${settings.value.customCss}">` : '';
-          const customJS = settings.value.customJs ? `<script src="${settings.value.customJs}"><\/script>` : '';
-          return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Markdown预览</title><style>body{margin:0;background:#f6f8fa;}.preview-container{max-width:900px;margin:2rem auto;background:white;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);padding:2rem;} ${customCSS}</style></head><body><div class="preview-container">${rendered}</div>${customJS}</body></html>`;
-        }
-        return '<html><body style="background:#fff;color:#111;padding:2rem;font-family:sans-serif"><p>无法预览此文件类型</p></body></html>';
-      });
-      const canSave = computed(() => { const tab = tabs.value.find(t => t.path === activePath.value); return !!tab && tab.unsaved && !!api.value; });
-
-      function toast(message, type = 'success') { const id = Date.now() + Math.random(); toasts.value.push({ id, message, type }); setTimeout(() => { toasts.value = toasts.value.filter(t => t.id !== id); }, 3000); }
-      function initAPI() { if (settings.value.token && settings.value.owner && settings.value.repo) api.value = new GitHubAPI(settings.value.token, settings.value.owner, settings.value.repo, settings.value.branch); else api.value = null; }
-      function closeSettingsWithoutRefresh() { showSettings.value = false; if (!api.value && (!settings.value.token || !settings.value.owner || !settings.value.repo)) toast('请先配置 GitHub 仓库信息', 'warn'); }
-      async function saveSettings() {
-        ['token','owner','repo','branch','postsPath','customCss','customJs'].forEach(k => localStorage.setItem('gh_'+k, settings.value[k]));
-        initAPI();
-        showSettings.value = false;
-        if (api.value) { await refreshTree(); } else { toast('配置不完整，请填写 Token / Owner / Repo', 'error'); }
-        toast('设置已保存');
-      }
-
-      // ===== 增强版 refreshTree（带超时保护） =====
-      async function refreshTree() {
-        if (!api.value) {
-          toast('请先在设置中配置 GitHub 仓库', 'warn');
-          showSettings.value = true;
-          loading.value = false;
-          return;
-        }
-        loading.value = true;
-
-        // 额外超时保护：12秒后强制关闭 loading
-        const guard = setTimeout(() => {
-          if (loading.value) {
-            loading.value = false;
-            toast('加载超时，请检查网络或仓库设置', 'error');
-          }
-        }, 12000);
-
-        try {
-          const data = await api.value.getContents(settings.value.postsPath);
-          clearTimeout(guard);
-          tree.value = buildTree(data, 0);
-          updateFilteredTree();
-          toast('文件树已刷新');
-        } catch (e) {
-          clearTimeout(guard);
-          toast('加载失败: ' + e.message, 'error');
-          tree.value = [];
-          filteredTree.value = [];
-        } finally {
-          loading.value = false;
-          clearTimeout(guard);
-        }
-      }
-
-      function buildTree(items, depth = 0) { return items.map(item => ({ name: item.name, path: item.path, type: item.type, sha: item.sha, depth, expanded: false, hidden: false, children: item.type === 'dir' ? [] : null })).sort((a, b) => { if (a.type !== b.type) return a.type === 'dir' ? -1 : 1; return a.name.localeCompare(b.name); }); }
-      function updateFilteredTree() { const query = searchQuery.value.toLowerCase().trim(); if (!query) { filteredTree.value = tree.value; return; } function filterItems(items) { return items.reduce((acc, item) => { const matches = item.name.toLowerCase().includes(query); let childMatches = []; if (item.children && item.children.length) childMatches = filterItems(item.children); if (matches || childMatches.length) { const copy = { ...item, children: childMatches.length ? childMatches : (item.children || null) }; if (matches && item.children && !childMatches.length) copy.children = []; acc.push(copy); } return acc; }, []); } filteredTree.value = filterItems(tree.value); }
-
-      async function openFile(item) {
-        if (!api.value) { toast('未配置GitHub', 'error'); showSettings.value = true; return; }
-        if (item.type === 'dir') {
-          if (!item.expanded) {
-            loading.value = true;
-            try {
-              const data = await api.value.getContents(item.path);
-              item.children = buildTree(data, item.depth + 1);
-            } catch (e) {
-              toast('加载目录失败: ' + e.message, 'error');
-            } finally {
-              loading.value = false;
-            }
-          }
-          item.expanded = !item.expanded;
-          updateFilteredTree();
-          return;
-        }
-
-        if (!tabs.value.find(t => t.path === item.path)) {
-          loading.value = true;
-          try {
-            const file = await api.value.getFile(item.path);
-            fileContents.value.set(item.path, file.content);
-            originalContents.value.set(item.path, file.content);
-            tabs.value.push({ path: item.path, name: item.name, sha: file.sha, unsaved: false });
-          } catch (e) {
-            toast('加载文件失败: ' + e.message, 'error');
-            loading.value = false;
-            return;
-          }
-        }
-
-        activePath.value = item.path;
-        if (isMobile.value) sidebarOpen.value = false;
-        await nextTick();
-        try {
-          initEditor(item.path);
-        } catch (e) {
-          toast('编辑器初始化失败: ' + e.message, 'error');
-        } finally {
-          loading.value = false;
-        }
-      }
-
-      function initEditor(path) {
-        const container = editorContainer.value;
-        if (!container) { toast('编辑器容器未就绪', 'error'); return; }
-        const content = fileContents.value.get(path) || '';
-        const filename = path.split('/').pop();
-
-        if (cmView) { cmView.destroy(); cmView = null; }
-        container.innerHTML = '';
-
-        try {
-          cmView = createEditor(container, content, filename, (val) => {
-            fileContents.value.set(path, val);
-            const tab = tabs.value.find(t => t.path === path);
-            if (tab) tab.unsaved = val !== originalContents.value.get(path);
-          });
-          editorType.value = 'codemirror';
-        } catch (err) {
-          console.error('CodeMirror init error:', err);
-          container.innerHTML = `<textarea class="fallback-textarea" spellcheck="false">${content}</textarea>`;
-          const textarea = container.querySelector('textarea');
-          textarea.addEventListener('input', () => {
-            const val = textarea.value;
-            fileContents.value.set(path, val);
-            const tab = tabs.value.find(t => t.path === path);
-            if (tab) tab.unsaved = val !== originalContents.value.get(path);
-          });
-          editorType.value = 'fallback';
-          toast('编辑器加载失败，使用纯文本模式', 'error');
-        }
-      }
-
-      function switchTab(path) {
-        if (activePath.value === path) return;
-        activePath.value = path;
-        nextTick(() => { try { initEditor(path); } catch (e) { toast('切换编辑器失败: ' + e.message, 'error'); } });
-      }
-
-      function closeTab(path) {
-        const tab = tabs.value.find(t => t.path === path);
-        if (tab && tab.unsaved && !confirm('文件有未保存的更改，确定要关闭吗？')) return;
-        tabs.value = tabs.value.filter(t => t.path !== path);
-        fileContents.value.delete(path);
-        originalContents.value.delete(path);
-        if (activePath.value === path) {
-          activePath.value = tabs.value.length ? tabs.value[tabs.value.length - 1].path : '';
-          if (activePath.value) {
-            nextTick(() => initEditor(activePath.value));
-          } else {
-            if (cmView) { cmView.destroy(); cmView = null; }
-            editorContainer.value.innerHTML = '';
-          }
-        }
-      }
-
-      async function saveCurrent() {
-        if (!canSave.value) return;
-        const tab = tabs.value.find(t => t.path === activePath.value);
-        if (!tab) return;
-        loading.value = true;
-        try {
-          const content = fileContents.value.get(activePath.value);
-          let currentSha = tab.sha;
-
-          try {
-            await api.value.updateFile(activePath.value, content, currentSha);
-            originalContents.value.set(activePath.value, content);
-            tab.unsaved = false;
-            const fileInfo = await api.value.getFile(activePath.value);
-            tab.sha = fileInfo.sha;
-            toast('保存成功');
-          } catch (err) {
-            if (err.message && (err.message.includes('sha') || err.message.includes('does not match'))) {
-              let fileInfo;
-              try {
-                fileInfo = await api.value.getFile(activePath.value);
-              } catch (e) {
-                if (e.message.includes('404') || e.message.includes('Not Found')) {
-                  await api.value.createFile(activePath.value, content);
-                  originalContents.value.set(activePath.value, content);
-                  tab.unsaved = false;
-                  const newFile = await api.value.getFile(activePath.value);
-                  tab.sha = newFile.sha;
-                  toast('保存成功（新建）');
-                  loading.value = false;
-                  return;
-                } else throw e;
-              }
-              const remoteSha = fileInfo.sha;
-              const remoteContent = fileInfo.content;
-              if (remoteContent === content) {
-                tab.sha = remoteSha;
-                originalContents.value.set(activePath.value, content);
-                tab.unsaved = false;
-                toast('已同步（内容相同）');
-              } else {
-                if (confirm(`远程文件已被修改，是否用您当前的内容覆盖？\n\n点击“确定”覆盖远程内容，点击“取消”放弃保存。`)) {
-                  await api.value.updateFile(activePath.value, content, remoteSha);
-                  originalContents.value.set(activePath.value, content);
-                  tab.unsaved = false;
-                  tab.sha = remoteSha;
-                  toast('保存成功（覆盖）');
-                } else {
-                  toast('已取消保存', 'warn');
-                }
-              }
-            } else {
-              throw err;
-            }
-          }
-        } catch (e) {
-          toast('保存失败: ' + e.message, 'error');
-        } finally {
-          loading.value = false;
-        }
-      }
-
-      function showNewFileModal() { if (!api.value) { showSettings.value = true; toast('请先配置 GitHub 仓库', 'warn'); return; } newFileName.value = ''; newFileTemplate.value = 'html-basic'; newFileWithMarkdown.value = true; newFileModal.value = true; }
-      async function createNewFile() {
-        const name = newFileName.value.trim();
-        if (!name) return;
-        const path = settings.value.postsPath + '/' + name;
-        let content = '';
-        if (name.endsWith('.html')) {
-          const opts = { title: name.replace('.html', ''), customCss: settings.value.customCss, customJs: settings.value.customJs, withMarkdown: newFileWithMarkdown.value };
-          if (newFileTemplate.value === 'html-basic') content = HTML_TEMPLATE_BASIC(opts);
-          else if (newFileTemplate.value === 'html-blog') content = HTML_TEMPLATE_BLOG(opts);
-          else content = `<!DOCTYPE html><html><head><title>${opts.title}</title></head><body></body></html>`;
-        } else if (name.endsWith('.md')) {
-          content = `# ${name.replace('.md', '')}\n\n开始书写你的文章...\n\n## 二级标题\n\n- 列表项\n- 示例 **加粗**\n\n\`\`\`javascript\nconsole.log("Hello Markdown");\n\`\`\``;
-        } else { content = ''; }
-        loading.value = true;
-        try {
-          await api.value.createFile(path, content);
-          newFileModal.value = false;
-          toast('文件创建成功');
-          await refreshTree();
-          fileContents.value.set(path, content);
-          originalContents.value.set(path, content);
-          tabs.value.push({ path, name, sha: null, unsaved: false });
-          activePath.value = path;
-          await nextTick();
-          initEditor(path);
-        } catch (e) {
-          toast('创建失败: ' + e.message, 'error');
-        } finally {
-          loading.value = false;
-        }
-      }
-
-      function confirmDelete(item) { deleteConfirm.value = item; }
-      async function doDelete() {
-        if (!deleteConfirm.value) return;
-        const item = deleteConfirm.value;
-        loading.value = true;
-        try {
-          await api.value.deleteFile(item.path, item.sha);
-          deleteConfirm.value = null;
-          toast('删除成功');
-          await refreshTree();
-          closeTab(item.path);
-        } catch (e) {
-          toast('删除失败: ' + e.message, 'error');
-        } finally {
-          loading.value = false;
-        }
-      }
-      function showRenameModal(item) { renameModal.value = item; renameValue.value = item.name; }
-      async function doRename() {
-        if (!renameModal.value || !renameValue.value.trim()) return;
-        const item = renameModal.value;
-        const newName = renameValue.value.trim();
-        if (newName === item.name) { renameModal.value = null; return; }
-        const oldPath = item.path;
-        const newPath = oldPath.substring(0, oldPath.lastIndexOf('/') + 1) + newName;
-        loading.value = true;
-        try {
-          const file = await api.value.getFile(oldPath);
-          await api.value.createFile(newPath, file.content);
-          await api.value.deleteFile(oldPath, file.sha);
-          renameModal.value = null;
-          toast('重命名成功');
-          await refreshTree();
-          const tab = tabs.value.find(t => t.path === oldPath);
-          if (tab) { tab.path = newPath; tab.name = newName; }
-          if (activePath.value === oldPath) activePath.value = newPath;
-        } catch (e) {
-          toast('重命名失败: ' + e.message, 'error');
-        } finally {
-          loading.value = false;
-        }
-      }
-
-      function getLanguageLabel(path) {
-        if (!path) return '';
-        if (path.endsWith('.md')) return 'Markdown';
-        if (path.endsWith('.html')) return 'HTML';
-        if (path.endsWith('.js')) return 'JavaScript';
-        if (path.endsWith('.css')) return 'CSS';
-        if (path.endsWith('.json')) return 'JSON';
-        return 'Plain Text';
-      }
-      function toggleSidebar() { sidebarOpen.value = !sidebarOpen.value; }
-      function onResize() { if (cmView) cmView.requestMeasure(); }
-      function handleGlobalSave(e) {
-        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-          e.preventDefault();
-          if (canSave.value) saveCurrent();
-        }
-      }
-
-      onMounted(() => {
-        initAPI();
-        if (api.value) refreshTree();
-        else showSettings.value = true;
-        window.addEventListener('resize', onResize);
-        window.addEventListener('keydown', handleGlobalSave);
-      });
-      onUnmounted(() => {
-        window.removeEventListener('resize', onResize);
-        window.removeEventListener('keydown', handleGlobalSave);
-        if (cmView) cmView.destroy();
-      });
-
-      return {
-        settings, showSettings, saveSettings, closeSettingsWithoutRefresh,
-        isMobile, sidebarOpen, toggleSidebar, loading, toasts, editorType,
-        tree, searchQuery, filteredTree, updateFilteredTree, refreshTree,
-        tabs, activePath, canSave, openFile, closeTab, saveCurrent, switchTab,
-        newFileModal, newFileName, newFileTemplate, newFileWithMarkdown,
-        showNewFileModal, createNewFile, deleteConfirm, confirmDelete, doDelete,
-        renameModal, renameValue, showRenameModal, doRename,
-        isHtmlFile, isMarkdownFile, previewHtml, showPreview,
-        editorContainer, getLanguageLabel
-      };
+    function getLanguageExtension(filename) {
+      if (filename.endsWith('.md') || filename.endsWith('.markdown')) return markdown();
+      if (filename.endsWith('.html') || filename.endsWith('.htm')) return html();
+      if (filename.endsWith('.js') || filename.endsWith('.ts') || filename.endsWith('.jsx') || filename.endsWith('.tsx')) return javascript();
+      if (filename.endsWith('.css') || filename.endsWith('.scss') || filename.endsWith('.less')) return css();
+      return markdown();
     }
-  }).mount('#app');
+
+    function createCodeMirrorEditor(container, initialContent, filename, onChange) {
+      const languageComp = new Compartment();
+      const extensions = [
+        lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), drawSelection(), dropCursor(),
+        rectangularSelection(), crosshairCursor(), highlightSpecialChars(), history(), bracketMatching(),
+        indentOnInput(), closeBrackets(), autocompletion(), highlightSelectionMatches(),
+        keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, indentWithTab]),
+        languageComp.of(getLanguageExtension(filename)), EditorState.tabSize.of(2), oneDark, syntaxHighlighting(customHighlightStyle),
+        EditorView.updateListener.of((update) => { if (update.docChanged) onChange(update.state.doc.toString()); }),
+        EditorView.theme({
+          '&': { height: '100%' }, '.cm-scroller': { fontFamily: '"SF Mono", Monaco, monospace', fontSize: '14px', lineHeight: '1.6' },
+          '.cm-gutters': { background: '#161b22', borderRight: '1px solid #30363d', color: '#8b949e' },
+          '.cm-activeLineGutter': { background: '#21262d' }, '.cm-activeLine': { background: 'rgba(88, 166, 255, 0.05)' },
+          '.cm-selectionBackground': { background: 'rgba(88, 166, 255, 0.2)' }, '.cm-cursor': { borderLeftColor: '#58a6ff' },
+          '.cm-tooltip': { background: '#161b22', borderColor: '#30363d' }, '.cm-tooltip-autocomplete': { background: '#161b22' },
+          '.cm-completionLabel': { color: '#c9d1d9' }, '.cm-completionDetail': { color: '#8b949e' },
+        }),
+      ];
+      const view = new EditorView({ state: EditorState.create({ doc: initialContent, extensions }), parent: container });
+      return { view, setContent: (content) => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } }) };
+    }
+
+    let monacoLoaded = false, monacoInstance = null, monacoLoadError = false;
+    function loadMonaco() {
+      return new Promise((resolve, reject) => {
+        if (monacoLoaded) { resolve(monacoInstance); return; }
+        if (monacoLoadError) { reject(new Error('Monaco previously failed')); return; }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs/loader.min.js';
+        script.onload = () => {
+          require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs' } });
+          window.MonacoEnvironment = {
+            getWorkerUrl: function(workerId, label) {
+              return `data:text/javascript;charset=utf-8,${encodeURIComponent(`self.MonacoEnvironment = { baseUrl: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/" }; importScripts("https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs/base/worker/workerMain.min.js");`)}`;
+            }
+          };
+          require(['vs/editor/editor.main'], function() { monacoLoaded = true; monacoInstance = monaco; resolve(monaco); }, (err) => { monacoLoadError = true; reject(err); });
+        };
+        script.onerror = () => { monacoLoadError = true; reject(new Error('Failed to load Monaco')); };
+        document.head.appendChild(script);
+      });
+    }
+
+    function getMonacoLanguage(filename) {
+      if (filename.endsWith('.md')) return 'markdown'; if (filename.endsWith('.html')) return 'html';
+      if (filename.endsWith('.js')) return 'javascript'; if (filename.endsWith('.ts')) return 'typescript';
+      if (filename.endsWith('.css')) return 'css'; if (filename.endsWith('.json')) return 'json';
+      if (filename.endsWith('.vue')) return 'html'; return 'plaintext';
+    }
+
+    const TreeItem = {
+      props: ['item', 'activePath'], emits: ['open', 'delete', 'rename'],
+      template: `<div><div class="tree-item" :class="{active: item.path===activePath, hidden: item.hidden}" :style="{'--depth': item.depth}" @click="item.type==='dir' ? toggle() : $emit('open', item)"><span class="icon">{{ item.type==='dir' ? (item.expanded ? '📂' : '📁') : getFileIcon(item.name) }}</span><span class="name">{{item.name}}</span><span class="actions" v-if="item.type!=='dir'" @click.stop><button class="btn-icon" @click="$emit('rename', item)">✏️</button><button class="btn-icon" @click="$emit('delete', item)">🗑️</button></span></div><div v-if="item.expanded && item.children"><tree-item v-for="child in item.children" :key="child.path" :item="child" :active-path="activePath" @open="$emit('open', $event)" @delete="$emit('delete', $event)" @rename="$emit('rename', $event)"/></div></div>`,
+      setup(props) {
+        const toggle = () => { props.item.expanded = !props.item.expanded; };
+        const getFileIcon = (name) => { if (name.endsWith('.md')) return '📝'; if (name.endsWith('.html')) return '🌐'; if (name.endsWith('.css')) return '🎨'; if (name.endsWith('.js')) return '⚡'; if (name.endsWith('.json')) return '📋'; return '📄'; };
+        return { toggle, getFileIcon };
+      }
+    };
+
+    createApp({
+      components: { TreeItem },
+      setup() {
+        const settings = ref({ token: localStorage.getItem('gh_token') || '', owner: localStorage.getItem('gh_owner') || '', repo: localStorage.getItem('gh_repo') || '', branch: localStorage.getItem('gh_branch') || 'main', postsPath: localStorage.getItem('gh_postsPath') || 'posts', customCss: localStorage.getItem('gh_customCss') || '', customJs: localStorage.getItem('gh_customJs') || '' });
+        const showSettings = ref(false);
+        const api = ref(null);
+        const isMobile = ref(window.innerWidth <= 768);
+        const sidebarOpen = ref(false);
+        const loading = ref(false);
+        const toasts = ref([]);
+        const editorType = ref('');
+        const tree = ref([]);
+        const searchQuery = ref('');
+        const filteredTree = ref([]);
+        const tabs = ref([]);
+        const activePath = ref('');
+        const fileContents = ref(new Map());
+        const originalContents = ref(new Map());
+        const editorContainer = ref(null);
+        let monacoEditor = null, cmEditor = null;
+        const newFileModal = ref(false), newFileName = ref(''), newFileTemplate = ref('html-basic'), newFileWithMarkdown = ref(true);
+        const deleteConfirm = ref(null), renameModal = ref(null), renameValue = ref('');
+        const showPreview = ref(false);
+
+        const currentContent = computed({
+          get: () => fileContents.value.get(activePath.value) || '',
+          set: (val) => { fileContents.value.set(activePath.value, val); const tab = tabs.value.find(t => t.path === activePath.value); if (tab) tab.unsaved = val !== originalContents.value.get(activePath.value); }
+        });
+        const canSave = computed(() => { const tab = tabs.value.find(t => t.path === activePath.value); return !!tab && tab.unsaved && !!api.value; });
+        const previewHtml = computed(() => isHtmlFile(activePath.value) ? currentContent.value : '');
+
+        function toast(message, type = 'success') { const id = Date.now() + Math.random(); toasts.value.push({ id, message, type }); setTimeout(() => { toasts.value = toasts.value.filter(t => t.id !== id); }, 3000); }
+        function initAPI() { if (settings.value.token && settings.value.owner && settings.value.repo) api.value = new GitHubAPI(settings.value.token, settings.value.owner, settings.value.repo, settings.value.branch); }
+        function saveSettings() { ['token','owner','repo','branch','postsPath','customCss','customJs'].forEach(k => localStorage.setItem('gh_'+k, settings.value[k])); initAPI(); showSettings.value = false; refreshTree(); toast('设置已保存'); }
+        async function refreshTree() { if (!api.value) { showSettings.value = true; return; } loading.value = true; try { const data = await api.value.getContents(settings.value.postsPath); tree.value = buildTree(data); filterTree(); toast('文件树已刷新'); } catch (e) { toast('加载失败: ' + e.message, 'error'); } finally { loading.value = false; } }
+        function buildTree(items, depth = 0) { return items.map(item => ({ name: item.name, path: item.path, type: item.type, sha: item.sha, depth, expanded: false, hidden: false, children: item.type === 'dir' ? [] : null })).sort((a, b) => { if (a.type !== b.type) return a.type === 'dir' ? -1 : 1; return a.name.localeCompare(b.name); }); }
+        function filterTree() { const query = searchQuery.value.toLowerCase().trim(); if (!query) { filteredTree.value = tree.value; return; } function filterItems(items) { return items.map(item => { const matches = item.name.toLowerCase().includes(query); let childMatches = []; if (item.children) { childMatches = filterItems(item.children); if (childMatches.length) item.expanded = true; } if (matches || childMatches.length) return { ...item, children: childMatches.length ? childMatches : item.children }; return null; }).filter(Boolean); } filteredTree.value = filterItems(JSON.parse(JSON.stringify(tree.value))); }
+
+        async function openFile(item) {
+          if (item.type === 'dir') { if (!item.expanded) { loading.value = true; try { const data = await api.value.getContents(item.path); item.children = buildTree(data, item.depth + 1); } catch (e) { toast('加载目录失败: ' + e.message, 'error'); return; } finally { loading.value = false; } } item.expanded = !item.expanded; return; }
+          if (!tabs.value.find(t => t.path === item.path)) { loading.value = true; try { const file = await api.value.getFile(item.path); fileContents.value.set(item.path, file.content); originalContents.value.set(item.path, file.content); tabs.value.push({ path: item.path, name: item.name, sha: file.sha, unsaved: false }); } catch (e) { toast('加载文件失败: ' + e.message, 'error'); return; } finally { loading.value = false; } }
+          activePath.value = item.path; if (isMobile.value) sidebarOpen.value = false; nextTick(() => initEditor(item.path));
+        }
+
+        async function initEditor(path) {
+          const content = fileContents.value.get(path) || '';
+          const filename = path.split('/').pop();
+          const useMonaco = !isMobile.value;
+          editorType.value = useMonaco ? 'monaco' : 'codemirror';
+          if (monacoEditor) { monacoEditor.dispose(); monacoEditor = null; }
+          if (cmEditor) { cmEditor.view.destroy(); cmEditor = null; }
+          await nextTick();
+          if (!editorContainer.value) {
+            await new Promise(r => setTimeout(r, 50));
+            await nextTick();
+          }
+          if (editorContainer.value) editorContainer.value.innerHTML = '';
+          if (useMonaco) {
+            try { const monaco = await loadMonaco(); monacoEditor = monaco.editor.create(editorContainer.value, { value: content, language: getMonacoLanguage(filename), theme: 'vs-dark', fontSize: 14, fontFamily: '"SF Mono", Monaco, monospace', lineNumbers: 'on', minimap: { enabled: false }, scrollBeyondLastLine: false, automaticLayout: true, tabSize: 2, wordWrap: 'on', renderWhitespace: 'selection', bracketPairColorization: { enabled: true }, padding: { top: 16, bottom: 16 } }); monacoEditor.onDidChangeModelContent(() => { const val = monacoEditor.getValue(); fileContents.value.set(path, val); const tab = tabs.value.find(t => t.path === path); if (tab) tab.unsaved = val !== originalContents.value.get(path); }); monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveCurrent()); }
+            catch (e) { console.error('Monaco init failed:', e); toast('Monaco 加载失败，回退到 CodeMirror', 'warn'); editorType.value = 'codemirror'; initCodeMirror(content, filename, path); }
+          } else { initCodeMirror(content, filename, path); }
+        }
+        function initCodeMirror(content, filename, path) { cmEditor = createCodeMirrorEditor(editorContainer.value, content, filename, (val) => { fileContents.value.set(path, val); const tab = tabs.value.find(t => t.path === path); if (tab) tab.unsaved = val !== originalContents.value.get(path); }); }
+        function switchTab(path) { activePath.value = path; nextTick(() => initEditor(path)); }
+        function closeTab(path) { const tab = tabs.value.find(t => t.path === path); if (tab && tab.unsaved && !confirm('文件有未保存的更改，确定要关闭吗？')) return; tabs.value = tabs.value.filter(t => t.path !== path); fileContents.value.delete(path); originalContents.value.delete(path); if (activePath.value === path) { activePath.value = tabs.value.length ? tabs.value[tabs.value.length - 1].path : ''; if (activePath.value) nextTick(() => initEditor(activePath.value)); } }
+        async function saveCurrent() { 
+          if (!canSave.value) return; 
+            const tab = tabs.value.find(t => t.path === activePath.value); 
+            if (!tab) return; 
+            loading.value = true; 
+            try { 
+              const content = fileContents.value.get(activePath.value); 
+              let result;
+              if (originalContents.value.has(activePath.value)) {
+                result = await api.value.updateFile(activePath.value, content, tab.sha);
+              } else {
+                result = await api.value.createFile(activePath.value, content);
+              }
+            // 🔥 直接使用返回结果中的新 SHA
+            tab.sha = result.content.sha;
+            originalContents.value.set(activePath.value, content); 
+            tab.unsaved = false; 
+            toast('保存成功'); 
+          } catch (e) { 
+            toast('保存失败: ' + e.message, 'error'); 
+          } finally { 
+            loading.value = false; 
+          } 
+        }
+        function showNewFileModal() { if (!api.value) { showSettings.value = true; return; } newFileName.value = ''; newFileTemplate.value = 'html-basic'; newFileWithMarkdown.value = true; newFileModal.value = true; }
+        async function createNewFile() { const name = newFileName.value.trim(); if (!name) return; const path = settings.value.postsPath + '/' + name; let content = ''; if (name.endsWith('.html')) { const opts = { title: name.replace('.html', ''), customCss: settings.value.customCss, customJs: settings.value.customJs, withMarkdown: newFileWithMarkdown.value }; if (newFileTemplate.value === 'html-basic') content = HTML_TEMPLATE_BASIC(opts); else if (newFileTemplate.value === 'html-blog') content = HTML_TEMPLATE_BLOG(opts); else content = `<!DOCTYPE html>\n<html>\n<head><title>${opts.title}</title></head>\n<body></body>\n</html>`; } loading.value = true; try { await api.value.createFile(path, content); newFileModal.value = false; toast('文件创建成功'); refreshTree(); fileContents.value.set(path, content); originalContents.value.set(path, content); tabs.value.push({ path, name, sha: null, unsaved: false }); activePath.value = path; nextTick(() => initEditor(path)); } catch (e) { toast('创建失败: ' + e.message, 'error'); } finally { loading.value = false; } }
+        function confirmDelete(item) { deleteConfirm.value = item; }
+        async function doDelete() { if (!deleteConfirm.value) return; const item = deleteConfirm.value; loading.value = true; try { await api.value.deleteFile(item.path, item.sha); deleteConfirm.value = null; toast('删除成功'); refreshTree(); closeTab(item.path); } catch (e) { toast('删除失败: ' + e.message, 'error'); } finally { loading.value = false; } }
+        function showRenameModal(item) { renameModal.value = item; renameValue.value = item.name; }
+        async function doRename() { if (!renameModal.value || !renameValue.value.trim()) return; const item = renameModal.value; const newName = renameValue.value.trim(); if (newName === item.name) { renameModal.value = null; return; } const oldPath = item.path; const newPath = oldPath.substring(0, oldPath.lastIndexOf('/') + 1) + newName; loading.value = true; try { const file = await api.value.getFile(oldPath); await api.value.createFile(newPath, file.content); await api.value.deleteFile(oldPath, file.sha); renameModal.value = null; toast('重命名成功'); refreshTree(); const tab = tabs.value.find(t => t.path === oldPath); if (tab) { tab.path = newPath; tab.name = newName; } if (activePath.value === oldPath) activePath.value = newPath; } catch (e) { toast('重命名失败: ' + e.message, 'error'); } finally { loading.value = false; } }
+        function isHtmlFile(path) { return path && path.endsWith('.html'); }
+        function getLanguageLabel(path) { if (!path) return ''; if (path.endsWith('.md')) return 'Markdown'; if (path.endsWith('.html')) return 'HTML'; if (path.endsWith('.js')) return 'JavaScript'; if (path.endsWith('.css')) return 'CSS'; if (path.endsWith('.json')) return 'JSON'; return 'Plain Text'; }
+        function toggleSidebar() { sidebarOpen.value = !sidebarOpen.value; }
+        function onResize() { const wasMobile = isMobile.value; isMobile.value = window.innerWidth <= 768; if (wasMobile !== isMobile.value && activePath.value) nextTick(() => initEditor(activePath.value)); if (monacoEditor) monacoEditor.layout(); }
+
+        onMounted(() => { initAPI(); if (api.value) refreshTree(); else showSettings.value = true; window.addEventListener('resize', onResize); });
+        onUnmounted(() => { window.removeEventListener('resize', onResize); if (monacoEditor) monacoEditor.dispose(); if (cmEditor) cmEditor.view.destroy(); });
+
+        return { settings, showSettings, saveSettings, isMobile, sidebarOpen, toggleSidebar, loading, toasts, editorType, tree, searchQuery, filteredTree, filterTree, refreshTree, tabs, activePath, canSave, openFile, closeTab, saveCurrent, switchTab, newFileModal, newFileName, newFileTemplate, newFileWithMarkdown, showNewFileModal, createNewFile, deleteConfirm, confirmDelete, doDelete, renameModal, renameValue, showRenameModal, doRename, isHtmlFile, previewHtml, showPreview, editorContainer, getLanguageLabel };
+      }
+    }).mount('#app');
+  </script>
+<script src="https://cdn.jsdelivr.net/npm/vconsole@3.11.0/dist/vconsole.min.js"></script>
+<script>
+ var vConsole = new VConsole();
 </script>
 </body>
 </html>
