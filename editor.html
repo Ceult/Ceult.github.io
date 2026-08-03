@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GitHub Pages 编辑器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* 基础 */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; touch-action: manipulation; }
+        .file-tree-item { cursor: pointer; user-select: none; -webkit-user-select: none; }
+        .file-tree-item:hover { background-color: rgba(255,255,255,0.05); }
+        .file-tree-item.active { background-color: rgba(59, 130, 246, 0.2); border-left: 2px solid #3b82f6; }
+        
+        /* 加载动画 */
+        .loading-spinner {
+            border: 2px solid rgba(255,255,255,0.1);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            width: 14px; height: 14px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 移动端编辑器 */
+        .mobile-editor-wrap {
+            display: flex;
+            height: 100%;
+            background: #1e1e1e;
+            overflow: hidden;
+        }
+        .line-numbers {
+            background: #1e1e1e;
+            color: #858585;
+            font-family: Consolas, Monaco, "Courier New", monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            padding: 8px 8px 8px 12px;
+            text-align: right;
+            overflow: hidden;
+            white-space: pre;
+            border-right: 1px solid #333;
+            user-select: none;
+            -webkit-user-select: none;
+            min-width: 40px;
+        }
+        .mobile-textarea {
+            flex: 1;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: Consolas, Monaco, "Courier New", monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            padding: 8px 12px;
+            border: none;
+            outline: none;
+            resize: none;
+            white-space: pre;
+            overflow-wrap: normal;
+            overflow-x: auto;
+            -webkit-appearance: none;
+        }
+        .mobile-textarea::selection { background: rgba(59, 130, 246, 0.3); }
+
+        /* 侧边栏动画 */
+        aside {
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .sidebar-overlay {
+            transition: opacity 0.25s;
+            backdrop-filter: blur(2px);
+        }
+
+        /* 触摸优化 */
+        .touch-target {
+            min-height: 44px;
+            min-width: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Toast */
+        .toast {
+            animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translate(-50%, -20px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        @keyframes toastOut {
+            from { opacity: 1; transform: translate(-50%, 0); }
+            to { opacity: 0; transform: translate(-50%, -20px); }
+        }
+
+        /* 长按菜单 */
+        #contextMenu {
+            touch-action: none;
+        }
+
+        /* 响应式 */
+        @media (max-width: 767px) {
+            .hide-mobile { display: none !important; }
+            aside {
+                position: fixed;
+                left: 0; top: 0; bottom: 0;
+                z-index: 50;
+                width: 85%;
+                max-width: 320px;
+                transform: translateX(-100%);
+                box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+            }
+            aside.open { transform: translateX(0); }
+            .sidebar-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.6);
+                z-index: 40;
+                opacity: 0;
+                pointer-events: none;
+            }
+            .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
+            
+            /* 增大触摸区域 */
+            .file-tree-item > div { padding-top: 10px; padding-bottom: 10px; }
+            .file-tree-item i { font-size: 16px; }
+            
+            /* 模态框移动端优化 */
+            .modal-panel {
+                margin: 0;
+                border-radius: 16px 16px 0 0;
+                max-height: 90vh;
+                position: fixed;
+                bottom: 0;
+                left: 0; right: 0;
+                width: 100%;
+                animation: slideUp 0.3s ease;
+            }
+            @keyframes slideUp {
+                from { transform: translateY(100%); }
+                to { transform: translateY(0); }
+            }
+        }
+        @media (min-width: 768px) {
+            .hide-desktop { display: none !important; }
+            .sidebar-overlay { display: none !important; }
+        }
+
+        /* Monaco 容器 */
+        .monaco-editor { position: absolute !important; top: 0; left: 0; right: 0; bottom: 0; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 h-screen flex flex-col overflow-hidden">
+
+    <!-- Toast -->
+    <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-4 py-2.5 rounded-lg shadow-2xl z-[60] hidden text-sm font-medium max-w-[90vw] text-center"></div>
+
+    <!-- 侧边栏遮罩 -->
+    <div id="sidebarOverlay" class="sidebar-overlay hidden" onclick="toggleSidebar(false)"></div>
+
+    <!-- Header -->
+    <header class="h-14 md:h-11 bg-gray-800 border-b border-gray-700 flex items-center px-3 md:px-4 justify-between shrink-0 z-20">
+        <div class="flex items-center gap-2 md:gap-3 min-w-0 overflow-hidden">
+            <button id="btnToggleSidebar" class="touch-target hide-desktop text-gray-300 hover:text-white mr-1" onclick="toggleSidebar(true)">
+                <i class="fas fa-bars text-lg"></i>
+            </button>
+            <i class="fab fa-github text-xl text-gray-400 shrink-0"></i>
+            <h1 class="font-semibold text-sm truncate hide-mobile">GitHub Pages 编辑器</h1>
+            <span id="repoInfo" class="text-xs text-gray-400 hidden truncate"></span>
+        </div>
+        <div class="flex items-center gap-1 md:gap-1.5 shrink-0">
+            <button id="btnRefresh" class="touch-target px-3 py-2 text-xs md:text-xs bg-gray-700 hover:bg-gray-600 rounded-lg md:rounded transition" title="刷新">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            <button id="btnNewFile" class="touch-target px-3 py-2 text-xs md:text-xs bg-gray-700 hover:bg-gray-600 rounded-lg md:rounded transition" title="新建">
+                <i class="fas fa-plus hide-mobile mr-1"></i><span class="hide-desktop"><i class="fas fa-file-plus"></i></span>
+            </button>
+            <button id="btnUpload" class="touch-target px-3 py-2 text-xs md:text-xs bg-gray-700 hover:bg-gray-600 rounded-lg md:rounded transition" title="上传">
+                <i class="fas fa-upload"></i>
+            </button>
+            <button id="btnSave" class="touch-target px-4 py-2 text-xs md:text-xs bg-blue-600 hover:bg-blue-500 rounded-lg md:rounded transition disabled:opacity-40 disabled:cursor-not-allowed font-medium" disabled title="保存">
+                <i class="fas fa-save mr-0 md:mr-1"></i><span class="hide-mobile">保存</span>
+            </button>
+            <button id="btnSettings" class="touch-target px-3 py-2 text-xs md:text-xs bg-gray-700 hover:bg-gray-600 rounded-lg md:rounded transition" title="设置">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <div class="flex-1 flex overflow-hidden relative">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="w-64 md:w-60 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0">
+            <div class="p-3 md:p-2 border-b border-gray-700 flex justify-between items-center h-14 md:h-auto">
+                <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">文件浏览器</span>
+                <div class="flex items-center gap-2">
+                    <div id="treeLoading" class="loading-spinner hidden"></div>
+                    <button class="hide-desktop text-gray-400 hover:text-white p-2" onclick="toggleSidebar(false)">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="fileTree" class="flex-1 overflow-y-auto p-1 text-sm overscroll-contain">
+                <div class="text-center text-gray-500 text-sm mt-10 px-2">点击右上角设置配置仓库</div>
+            </div>
+        </aside>
+
+        <!-- Editor Area -->
+        <main class="flex-1 flex flex-col min-w-0 relative">
+            <!-- File Path Bar -->
+            <div class="h-10 md:h-8 bg-gray-800 border-b border-gray-700 flex items-center px-3 justify-between shrink-0">
+                <div id="currentFilePath" class="text-xs text-gray-300 font-mono truncate">未打开文件</div>
+                <div id="dirtyIndicator" class="hidden flex items-center gap-1.5 shrink-0 ml-2">
+                    <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span>
+                    <span class="text-xs text-yellow-500 font-medium">未保存</span>
+                </div>
+            </div>
+            
+            <!-- Editor Container -->
+            <div id="editorContainer" class="flex-1 relative bg-[#1e1e1e]">
+                <div id="emptyState" class="absolute inset-0 flex items-center justify-center text-gray-500">
+                    <div class="text-center px-4">
+                        <i class="fas fa-code text-4xl mb-3 opacity-20"></i>
+                        <p class="text-sm">从左侧选择文件开始编辑</p>
+                    </div>
+                </div>
+                <!-- Mobile Editor -->
+                <div id="mobileEditor" class="mobile-editor-wrap hidden">
+                    <div class="line-numbers" id="lineNumbers">1</div>
+                    <textarea id="mobileTextarea" class="mobile-textarea" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+                </div>
+            </div>
+            
+            <!-- Status Bar -->
+            <footer class="h-10 md:h-6 bg-blue-900 border-t border-blue-800 flex items-center px-3 text-xs text-gray-300 justify-between shrink-0">
+                <div id="statusLeft" class="truncate max-w-[60%]">就绪</div>
+                <div class="flex gap-3 shrink-0">
+                    <span id="cursorPos" class="hide-mobile">Ln 1, Col 1</span>
+                    <span id="editorModeBadge" class="bg-blue-800 px-1.5 rounded text-[10px] md:text-xs">TEXT</span>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 backdrop-blur-sm overflow-y-auto py-4">
+        <div class="modal-panel bg-gray-800 border border-gray-700 shadow-2xl w-full max-w-md mx-4 md:mx-0 md:rounded-lg">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="font-semibold text-sm">仓库设置</h2>
+                <button id="closeSettings" class="touch-target text-gray-400 hover:text-white transition w-8 h-8"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-4 space-y-3">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">GitHub Personal Access Token</label>
+                    <input type="password" id="inputToken" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none transition" placeholder="ghp_xxxxxxxxxxxx">
+                    <p class="text-xs text-gray-500 mt-1">需要 <code class="bg-gray-700 px-1 rounded">repo</code> 权限</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">仓库所有者</label>
+                        <input type="text" id="inputOwner" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none transition" placeholder="username">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">仓库名称</label>
+                        <input type="text" id="inputRepo" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none transition" placeholder="repo-name">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">分支</label>
+                    <input type="text" id="inputBranch" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none transition" placeholder="main" value="main">
+                </div>
+                <div class="bg-gray-900/50 rounded-lg p-3 text-xs text-gray-400 border border-gray-700/50 space-y-1">
+                    <p><i class="fas fa-shield-alt text-blue-400 mr-1"></i> <strong>安全提示：</strong></p>
+                    <ul class="list-disc list-inside space-y-0.5 text-gray-500">
+                        <li>Token 仅保存在浏览器本地</li>
+                        <li>建议创建 <a href="https://github.com/settings/personal-access-tokens" target="_blank" class="text-blue-400 hover:underline">Fine-grained token</a></li>
+                        <li>所有请求直接发往 GitHub API</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end gap-2">
+                <button id="btnTestConnection" class="touch-target px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded-lg transition">测试连接</button>
+                <button id="btnSaveSettings" class="touch-target px-4 py-2 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg transition font-medium">保存并加载</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New File Modal -->
+    <div id="newFileModal" class="fixed inset-0 bg-black/70 hidden items-end md:items-center justify-center z-50 backdrop-blur-sm">
+        <div class="modal-panel bg-gray-800 border border-gray-700 shadow-2xl w-full max-w-md mx-4 md:mx-0 md:rounded-lg">
+            <div class="p-4 border-b border-gray-700">
+                <h2 class="font-semibold text-sm">新建文件</h2>
+            </div>
+            <div class="p-4">
+                <label class="block text-xs text-gray-400 mb-1">文件路径（支持多级目录）</label>
+                <input type="text" id="inputNewFilePath" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none transition" placeholder="path/to/file.md">
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end gap-2">
+                <button id="btnCancelNewFile" class="touch-target px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded-lg transition">取消</button>
+                <button id="btnConfirmNewFile" class="touch-target px-4 py-2 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg transition font-medium">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="fixed inset-0 bg-black/70 hidden items-end md:items-center justify-center z-50 backdrop-blur-sm">
+        <div class="modal-panel bg-gray-800 border border-gray-700 shadow-2xl w-full max-w-md mx-4 md:mx-0 md:rounded-lg">
+            <div class="p-4 border-b border-gray-700">
+                <h2 class="font-semibold text-sm">上传文件</h2>
+            </div>
+            <div class="p-4 space-y-3">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">目标路径（含文件名）</label>
+                    <input type="text" id="inputUploadPath" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none transition" placeholder="assets/image.png">
+                </div>
+                <div class="border-2 border-dashed border-gray-700 rounded-lg p-8 text-center hover:border-gray-500 transition cursor-pointer active:bg-gray-700/50" id="dropZone">
+                    <i class="fas fa-cloud-upload-alt text-3xl text-gray-500 mb-2"></i>
+                    <p class="text-sm text-gray-400">点击选择文件或拖拽到此处</p>
+                    <input type="file" id="fileInput" class="hidden">
+                </div>
+                <div id="uploadPreview" class="hidden text-xs text-gray-400 bg-gray-900/50 p-2 rounded-lg border border-gray-700/50"></div>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end gap-2">
+                <button id="btnCancelUpload" class="touch-target px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded-lg transition">取消</button>
+                <button id="btnConfirmUpload" class="touch-target px-4 py-2 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg transition font-medium" disabled>上传</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="contextMenu" class="fixed bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 hidden z-[70] min-w-[160px]">
+        <button id="ctxDelete" class="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-gray-700 transition touch-target justify-start">
+            <i class="fas fa-trash-alt w-5"></i> 删除
+        </button>
+        <button id="ctxRename" class="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 transition touch-target justify-start">
+            <i class="fas fa-edit w-5"></i> 重命名
+        </button>
+    </div>
+
+    <script>
+        // ==================== 配置与状态 ====================
+        const CONFIG_KEY = 'github_editor_config_v2';
+        let config = null;
+        let api = null;
+        let editor = null;
+        let editorReady = false;
+        let currentFile = null;
+        let fileTreeData = [];
+        let contextMenuTarget = null;
+        let uploadFileData = null;
+        let currentEditorType = null; // 'monaco' or 'textarea'
+
+        // ==================== DOM 引用 ====================
+        const els = {
+            fileTree: document.getElementById('fileTree'),
+            editorContainer: document.getElementById('editorContainer'),
+            emptyState: document.getElementById('emptyState'),
+            mobileEditor: document.getElementById('mobileEditor'),
+            mobileTextarea: document.getElementById('mobileTextarea'),
+            lineNumbers: document.getElementById('lineNumbers'),
+            currentFilePath: document.getElementById('currentFilePath'),
+            dirtyIndicator: document.getElementById('dirtyIndicator'),
+            btnSave: document.getElementById('btnSave'),
+            btnRefresh: document.getElementById('btnRefresh'),
+            btnNewFile: document.getElementById('btnNewFile'),
+            btnUpload: document.getElementById('btnUpload'),
+            btnSettings: document.getElementById('btnSettings'),
+            settingsModal: document.getElementById('settingsModal'),
+            closeSettings: document.getElementById('closeSettings'),
+            inputToken: document.getElementById('inputToken'),
+            inputOwner: document.getElementById('inputOwner'),
+            inputRepo: document.getElementById('inputRepo'),
+            inputBranch: document.getElementById('inputBranch'),
+            btnSaveSettings: document.getElementById('btnSaveSettings'),
+            btnTestConnection: document.getElementById('btnTestConnection'),
+            repoInfo: document.getElementById('repoInfo'),
+            statusLeft: document.getElementById('statusLeft'),
+            treeLoading: document.getElementById('treeLoading'),
+            newFileModal: document.getElementById('newFileModal'),
+            inputNewFilePath: document.getElementById('inputNewFilePath'),
+            btnConfirmNewFile: document.getElementById('btnConfirmNewFile'),
+            btnCancelNewFile: document.getElementById('btnCancelNewFile'),
+            uploadModal: document.getElementById('uploadModal'),
+            inputUploadPath: document.getElementById('inputUploadPath'),
+            dropZone: document.getElementById('dropZone'),
+            fileInput: document.getElementById('fileInput'),
+            btnConfirmUpload: document.getElementById('btnConfirmUpload'),
+            btnCancelUpload: document.getElementById('btnCancelUpload'),
+            uploadPreview: document.getElementById('uploadPreview'),
+            contextMenu: document.getElementById('contextMenu'),
+            ctxDelete: document.getElementById('ctxDelete'),
+            ctxRename: document.getElementById('ctxRename'),
+            sidebar: document.getElementById('sidebar'),
+            sidebarOverlay: document.getElementById('sidebarOverlay'),
+            toast: document.getElementById('toast'),
+            editorModeBadge: document.getElementById('editorModeBadge')
+        };
+
+        // ==================== 设备检测 ====================
+        function isMobile() {
+            return window.innerWidth < 768;
+        }
+
+        // ==================== GitHub API ====================
+        class GitHubAPI {
+            constructor(token, owner, repo, branch) {
+                this.token = token;
+                this.owner = owner;
+                this.repo = repo;
+                this.branch = branch || 'main';
+                this.base = 'https://api.github.com';
+            }
+
+            async request(path, options = {}) {
+                const url = `${this.base}${path}`;
+                const headers = {
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28'
+                };
+                if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+                if (options.headers) Object.assign(headers, options.headers);
+
+                const response = await fetch(url, { ...options, headers });
+                
+                if (response.status === 404) throw new Error('资源不存在 (404)');
+                if (response.status === 401) throw new Error('认证失败 (401)，请检查 Token');
+                if (response.status === 403) throw new Error('权限不足 (403)');
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${text.slice(0, 200)}`);
+                }
+                if (response.status === 204) return null;
+                return response.json();
+            }
+
+            async getContents(path = '') {
+                const encodedPath = path ? encodeURIComponent(path).replace(/%2F/g, '/') : '';
+                return this.request(`/repos/${this.owner}/${this.repo}/contents/${encodedPath}?ref=${this.branch}`);
+            }
+
+            async getFile(path) {
+                const data = await this.getContents(path);
+                if (Array.isArray(data)) throw new Error('该路径是目录，不是文件');
+                
+                if (data.content) {
+                    const cleanBase64 = data.content.replace(/\n/g, '');
+                    try {
+                        data.decoded = decodeURIComponent(escape(atob(cleanBase64)));
+                        data.isBinary = false;
+                    } catch (e) {
+                        data.decoded = null;
+                        data.isBinary = true;
+                    }
+                } else if (data.download_url) {
+                    try {
+                        const resp = await fetch(data.download_url);
+                        data.decoded = await resp.text();
+                        data.isBinary = false;
+                    } catch (e) {
+                        data.decoded = null;
+                        data.isBinary = true;
+                    }
+                }
+                return data;
+            }
+
+            async createOrUpdateFile(path, content, message, sha = null, isBase64 = false) {
+                const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
+                const body = {
+                    message: message || `Update ${path}`,
+                    content: isBase64 ? content : btoa(unescape(encodeURIComponent(content))),
+                    branch: this.branch
+                };
+                if (sha) body.sha = sha;
+                
+                return this.request(`/repos/${this.owner}/${this.repo}/contents/${encodedPath}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            }
+
+            async deleteFile(path, sha, message) {
+                const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
+                return this.request(`/repos/${this.owner}/${this.repo}/contents/${encodedPath}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message || `Delete ${path}`,
+                        sha: sha,
+                        branch: this.branch
+                    })
+                });
+            }
+
+            async testConnection() {
+                return this.request(`/repos/${this.owner}/${this.repo}`);
+            }
+        }
+
+        // ==================== Toast ====================
+        function showToast(msg, type = 'info') {
+            els.toast.textContent = msg;
+            els.toast.className = `fixed top-4 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-lg shadow-2xl z-[60] text-sm font-medium max-w-[90vw] text-center toast ${
+                type === 'error' ? 'bg-red-900/90 border border-red-700 text-red-100' :
+                type === 'success' ? 'bg-green-900/90 border border-green-700 text-green-100' :
+                'bg-gray-800 border border-gray-600 text-white'
+            }`;
+            els.toast.classList.remove('hidden');
+            setTimeout(() => els.toast.classList.add('hidden'), 3000);
+        }
+
+        // ==================== 编辑器管理 ====================
+        function initEditor() {
+            if (isMobile()) {
+                return initTextareaEditor();
+            } else {
+                return initMonacoEditor();
+            }
+        }
+
+        function initTextareaEditor() {
+            currentEditorType = 'textarea';
+            els.editorModeBadge.textContent = 'TEXT';
+            els.emptyState.classList.add('hidden');
+            els.mobileEditor.classList.remove('hidden');
+            
+            els.mobileTextarea.addEventListener('input', onEditorChange);
+            els.mobileTextarea.addEventListener('scroll', syncLineNumbersScroll);
+            els.mobileTextarea.addEventListener('keydown', handleTextareaKeydown);
+            
+            return Promise.resolve();
+        }
+
+        function initMonacoEditor() {
+            if (editorReady) return Promise.resolve();
+            currentEditorType = 'monaco';
+            els.editorModeBadge.textContent = 'MONACO';
+            
+            return new Promise((resolve) => {
+                require.config({ 
+                    paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }
+                });
+                
+                require(['vs/editor/editor.main'], function() {
+                    els.emptyState.classList.add('hidden');
+                    const container = document.createElement('div');
+                    container.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;';
+                    els.editorContainer.appendChild(container);
+                    
+                    editor = monaco.editor.create(container, {
+                        value: '',
+                        language: 'plaintext',
+                        theme: 'vs-dark',
+                        automaticLayout: true,
+                        minimap: { enabled: true },
+                        fontSize: 14,
+                        fontFamily: 'Consolas, "Courier New", monospace',
+                        scrollBeyondLastLine: false,
+                        renderWhitespace: 'selection',
+                        tabSize: 2,
+                        wordWrap: 'on',
+                        padding: { top: 8 },
+                        contextmenu: false,
+                        quickSuggestions: false,
+                        parameterHints: { enabled: false },
+                        hover: { enabled: false }
+                    });
+
+                    editor.onDidChangeModelContent(() => {
+                        if (currentFile) {
+                            const newValue = editor.getValue();
+                            const isDirty = newValue !== currentFile.originalContent;
+                            currentFile.content = newValue;
+                            updateDirtyState(isDirty);
+                        }
+                    });
+
+                    editor.onDidChangeCursorPosition((e) => {
+                        document.getElementById('cursorPos').textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+                    });
+
+                    editorReady = true;
+                    resolve();
+                });
+            });
+        }
+
+        function getLanguage(path) {
+            const ext = path.split('.').pop()?.toLowerCase();
+            const map = {
+                'js': 'javascript', 'ts': 'typescript', 'jsx': 'javascript', 'tsx': 'typescript',
+                'html': 'html', 'htm': 'html', 'css': 'css', 'scss': 'scss', 'sass': 'sass',
+                'json': 'json', 'md': 'markdown', 'py': 'python', 'java': 'java',
+                'c': 'c', 'cpp': 'cpp', 'h': 'c', 'cs': 'csharp', 'go': 'go',
+                'rs': 'rust', 'php': 'php', 'rb': 'ruby', 'sh': 'shell', 'bash': 'shell',
+                'yaml': 'yaml', 'yml': 'yaml', 'xml': 'xml', 'sql': 'sql',
+                'vue': 'html', 'swift': 'swift', 'kt': 'kotlin', 'dockerfile': 'dockerfile'
+            };
+            return map[ext] || 'plaintext';
+        }
+
+        function setEditorContent(content, path) {
+            if (currentEditorType === 'monaco') {
+                const model = monaco.editor.createModel(content, getLanguage(path));
+                editor.setModel(model);
+            } else {
+                els.mobileTextarea.value = content;
+                updateLineNumbers();
+                els.mobileTextarea.focus();
+            }
+        }
+
+        function getEditorValue() {
+            if (currentEditorType === 'monaco') return editor.getValue();
+            return els.mobileTextarea.value;
+        }
+
+        function onEditorChange() {
+            if (currentFile) {
+                const newValue = els.mobileTextarea.value;
+                const isDirty = newValue !== currentFile.originalContent;
+                currentFile.content = newValue;
+                updateLineNumbers();
+                updateDirtyState(isDirty);
+            }
+        }
+
+        function updateLineNumbers() {
+            const text = els.mobileTextarea.value;
+            const lines = text.split('\n').length;
+            els.lineNumbers.innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('\n');
+            syncLineNumbersScroll();
+        }
+
+        function syncLineNumbersScroll() {
+            els.lineNumbers.scrollTop = els.mobileTextarea.scrollTop;
+        }
+
+        function handleTextareaKeydown(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+                this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+                this.selectionStart = this.selectionEnd = start + 2;
+                onEditorChange();
+            }
+        }
+
+        // ==================== 配置管理 ====================
+        function loadConfig() {
+            try {
+                const saved = localStorage.getItem(CONFIG_KEY);
+                if (saved) {
+                    config = JSON.parse(saved);
+                    els.inputToken.value = config.token || '';
+                    els.inputOwner.value = config.owner || '';
+                    els.inputRepo.value = config.repo || '';
+                    els.inputBranch.value = config.branch || 'main';
+                    return true;
+                }
+            } catch (e) { console.error(e); }
+            return false;
+        }
+
+        function saveConfig() {
+            config = {
+                token: els.inputToken.value.trim(),
+                owner: els.inputOwner.value.trim(),
+                repo: els.inputRepo.value.trim(),
+                branch: els.inputBranch.value.trim() || 'main'
+            };
+            localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+            api = new GitHubAPI(config.token, config.owner, config.repo, config.branch);
+            els.repoInfo.textContent = `${config.owner}/${config.repo}`;
+            els.repoInfo.classList.remove('hidden');
+        }
+
+        // ==================== 文件树管理 ====================
+        async function loadFileTree() {
+            if (!api) return;
+            
+            setStatus('正在加载...');
+            els.treeLoading.classList.remove('hidden');
+            els.fileTree.innerHTML = '<div class="flex justify-center mt-10"><div class="loading-spinner" style="width:24px;height:24px;border-width:2px;"></div></div>';
+            
+            try {
+                const root = await api.getContents('');
+                fileTreeData = buildTree(root);
+                renderFileTree();
+                setStatus('就绪');
+            } catch (err) {
+                setStatus('加载失败', 'error');
+                showToast(err.message, 'error');
+                els.fileTree.innerHTML = `<div class="text-center text-red-400 text-sm mt-10 px-2">${escapeHtml(err.message)}</div>`;
+            } finally {
+                els.treeLoading.classList.add('hidden');
+            }
+        }
+
+        function buildTree(items) {
+            if (!Array.isArray(items)) return [];
+            return items.map(item => ({
+                ...item,
+                expanded: false,
+                children: item.type === 'dir' ? null : undefined,
+                loading: false
+            })).sort((a, b) => {
+                if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+                return a.name.localeCompare(b.name);
+            });
+        }
+
+        function renderFileTree() {
+            els.fileTree.innerHTML = '';
+            fileTreeData.forEach(item => {
+                els.fileTree.appendChild(createTreeItem(item, 0));
+            });
+        }
+
+        function createTreeItem(item, depth) {
+            const div = document.createElement('div');
+            div.className = 'file-tree-item select-none';
+            div.style.paddingLeft = `${depth * 14 + 6}px`;
+            div.dataset.path = item.path;
+            div.dataset.type = item.type;
+            div.dataset.sha = item.sha;
+            
+            if (currentFile && currentFile.path === item.path) {
+                div.classList.add('active');
+            }
+            
+            const icon = item.type === 'dir' 
+                ? (item.expanded ? '<i class="fas fa-folder-open text-yellow-500 w-5 text-center inline-block text-base"></i>' : '<i class="fas fa-folder text-yellow-500 w-5 text-center inline-block text-base"></i>')
+                : getFileIcon(item.name);
+            
+            const row = document.createElement('div');
+            row.className = 'py-2.5 md:py-1 px-2 rounded flex items-center gap-2 overflow-hidden';
+            row.innerHTML = `${icon} <span class="truncate text-sm">${escapeHtml(item.name)}</span>`;
+            if (item.loading) {
+                row.innerHTML += ' <div class="loading-spinner ml-auto" style="width:16px;height:16px;"></div>';
+            }
+            
+            div.appendChild(row);
+            
+            // 点击
+            div.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (item.type === 'dir') {
+                    item.expanded = !item.expanded;
+                    if (item.expanded && item.children === null) {
+                        item.loading = true;
+                        renderFileTree();
+                        try {
+                            const children = await api.getContents(item.path);
+                            item.children = buildTree(children);
+                        } catch (err) {
+                            showToast('加载目录失败: ' + err.message, 'error');
+                            item.expanded = false;
+                        }
+                        item.loading = false;
+                        renderFileTree();
+                    } else {
+                        renderFileTree();
+                    }
+                } else {
+                    await openFile(item.path, item.sha);
+                    if (isMobile()) toggleSidebar(false);
+                }
+            });
+            
+            // 右键 / 长按
+            div.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                contextMenuTarget = item;
+                showContextMenu(e.clientX, e.clientY);
+            });
+            
+            // 长按支持（移动端）
+            let longPressTimer;
+            div.addEventListener('touchstart', (e) => {
+                longPressTimer = setTimeout(() => {
+                    const touch = e.touches[0];
+                    contextMenuTarget = item;
+                    showContextMenu(touch.clientX, touch.clientY);
+                }, 600);
+            }, { passive: true });
+            div.addEventListener('touchend', () => clearTimeout(longPressTimer));
+            div.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+            
+            if (item.type === 'dir' && item.expanded && item.children) {
+                const childrenContainer = document.createElement('div');
+                item.children.forEach(child => {
+                    childrenContainer.appendChild(createTreeItem(child, depth + 1));
+                });
+                div.appendChild(childrenContainer);
+            }
+            
+            return div;
+        }
+
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop()?.toLowerCase();
+            const map = {
+                'js': 'fab fa-js text-yellow-400', 'ts': 'fab fa-js text-blue-400',
+                'html': 'fab fa-html5 text-orange-500', 'htm': 'fab fa-html5 text-orange-500',
+                'css': 'fab fa-css3-alt text-blue-500', 'scss': 'fab fa-sass text-pink-400',
+                'md': 'fab fa-markdown text-gray-400', 'json': 'fas fa-code text-gray-400',
+                'py': 'fab fa-python text-blue-300', 'java': 'fab fa-java text-red-400',
+                'jpg': 'fas fa-image text-purple-400', 'jpeg': 'fas fa-image text-purple-400',
+                'png': 'fas fa-image text-purple-400', 'gif': 'fas fa-image text-purple-400',
+                'svg': 'fas fa-image text-purple-400', 'pdf': 'fas fa-file-pdf text-red-500',
+                'zip': 'fas fa-file-archive text-yellow-600', 'rar': 'fas fa-file-archive text-yellow-600'
+            };
+            return `<i class="${map[ext] || 'fas fa-file text-gray-400'} w-5 text-center inline-block text-base"></i>`;
+        }
+
+        // ==================== 文件操作 ====================
+        async function openFile(path, sha) {
+            if (!api) return;
+            
+            if (currentFile && currentFile.path !== path && currentFile.content !== currentFile.originalContent) {
+                if (!confirm('当前文件有未保存的更改，确定要切换吗？')) return;
+            }
+            
+            setStatus('打开中...');
+            
+            try {
+                const fileData = await api.getFile(path);
+                
+                if (fileData.isBinary) {
+                    setStatus('二进制文件');
+                    showToast('二进制文件无法编辑，请在 GitHub 查看', 'error');
+                    if (confirm('要在浏览器中查看此文件吗？')) {
+                        window.open(fileData.html_url || `https://github.com/${config.owner}/${config.repo}/blob/${config.branch}/${path}`, '_blank');
+                    }
+                    return;
+                }
+                
+                currentFile = {
+                    path: path,
+                    sha: fileData.sha,
+                    content: fileData.decoded,
+                    originalContent: fileData.decoded
+                };
+                
+                await initEditor();
+                setEditorContent(fileData.decoded, path);
+                
+                els.currentFilePath.textContent = path;
+                updateDirtyState(false);
+                setStatus('就绪');
+                renderFileTree();
+            } catch (err) {
+                setStatus('打开失败', 'error');
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function saveFile() {
+            if (!api || !currentFile) return;
+            
+            setStatus('保存中...');
+            els.btnSave.disabled = true;
+            
+            try {
+                const content = getEditorValue();
+                await api.createOrUpdateFile(
+                    currentFile.path,
+                    content,
+                    `Update ${currentFile.path} via GitHub Pages Editor`,
+                    currentFile.sha
+                );
+                
+                const updated = await api.getFile(currentFile.path);
+                currentFile.sha = updated.sha;
+                currentFile.originalContent = content;
+                currentFile.content = content;
+                
+                updateDirtyState(false);
+                setStatus('已保存');
+                showToast('保存成功', 'success');
+            } catch (err) {
+                setStatus('保存失败', 'error');
+                showToast(err.message, 'error');
+                els.btnSave.disabled = false;
+            }
+        }
+
+        async function createNewFile() {
+            const path = els.inputNewFilePath.value.trim();
+            if (!path) return;
+            if (!api) { showToast('请先配置仓库', 'error'); return; }
+            
+            try {
+                await api.createOrUpdateFile(path, '', `Create ${path} via GitHub Pages Editor`);
+                showToast('创建成功', 'success');
+                closeModal('newFileModal');
+                els.inputNewFilePath.value = '';
+                await loadFileTree();
+                await openFile(path);
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function deleteFile(item) {
+            if (!confirm(`确定要删除 ${item.path} 吗？`)) return;
+            if (!api) return;
+            
+            try {
+                if (item.type === 'dir') {
+                    showToast('暂不支持删除目录', 'error');
+                    return;
+                }
+                
+                await api.deleteFile(item.path, item.sha, `Delete ${item.path} via GitHub Pages Editor`);
+                showToast('已删除', 'success');
+                
+                if (currentFile && currentFile.path === item.path) {
+                    currentFile = null;
+                    if (editor) editor.setValue('');
+                    els.mobileTextarea.value = '';
+                    els.emptyState.classList.remove('hidden');
+                    els.mobileEditor.classList.add('hidden');
+                    els.currentFilePath.textContent = '未打开文件';
+                    updateDirtyState(false);
+                }
+                
+                await loadFileTree();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        // ==================== 上传功能 ====================
+        async function handleUpload() {
+            if (!uploadFileData || !api) return;
+            
+            const path = els.inputUploadPath.value.trim();
+            if (!path) { showToast('请输入目标路径', 'error'); return; }
+            
+            setStatus('上传中...');
+            els.btnConfirmUpload.disabled = true;
+            
+            try {
+                await api.createOrUpdateFile(path, uploadFileData.base64, `Upload ${path} via GitHub Pages Editor`, null, true);
+                showToast('上传成功', 'success');
+                closeModal('uploadModal');
+                resetUpload();
+                await loadFileTree();
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                els.btnConfirmUpload.disabled = false;
+            }
+        }
+
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function handleFileSelect(file) {
+            try {
+                const base64 = await readFileAsBase64(file);
+                uploadFileData = { name: file.name, base64, size: file.size };
+                els.inputUploadPath.value = file.name;
+                els.uploadPreview.innerHTML = `已选择: <strong>${escapeHtml(file.name)}</strong> (${(file.size/1024).toFixed(1)} KB)`;
+                els.uploadPreview.classList.remove('hidden');
+                els.btnConfirmUpload.disabled = false;
+            } catch (err) {
+                showToast('读取文件失败', 'error');
+            }
+        }
+
+        function resetUpload() {
+            uploadFileData = null;
+            els.inputUploadPath.value = '';
+            els.uploadPreview.classList.add('hidden');
+            els.btnConfirmUpload.disabled = true;
+            els.fileInput.value = '';
+        }
+
+        // ==================== UI 辅助 ====================
+        function updateDirtyState(isDirty) {
+            els.dirtyIndicator.classList.toggle('hidden', !isDirty);
+            els.btnSave.disabled = !isDirty;
+        }
+
+        function setStatus(msg, type = 'normal') {
+            els.statusLeft.textContent = msg;
+            els.statusLeft.className = `truncate max-w-[60%] ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : ''}`;
+        }
+
+        function showContextMenu(x, y) {
+            const maxX = window.innerWidth - 170;
+            const maxY = window.innerHeight - 100;
+            els.contextMenu.style.left = `${Math.min(x, maxX)}px`;
+            els.contextMenu.style.top = `${Math.min(y, maxY)}px`;
+            els.contextMenu.classList.remove('hidden');
+        }
+
+        function hideContextMenu() {
+            els.contextMenu.classList.add('hidden');
+            contextMenuTarget = null;
+        }
+
+        function openModal(id) {
+            els[id].classList.remove('hidden');
+            els[id].classList.add('flex');
+            // 移动端自动聚焦第一个输入框
+            setTimeout(() => {
+                const input = els[id].querySelector('input:not([type=file])');
+                if (input) input.focus();
+            }, 100);
+        }
+
+        function closeModal(id) {
+            els[id].classList.add('hidden');
+            els[id].classList.remove('flex');
+        }
+
+        function toggleSidebar(show) {
+            if (show) {
+                els.sidebar.classList.add('open');
+                els.sidebarOverlay.classList.add('open');
+                els.sidebarOverlay.classList.remove('hidden');
+            } else {
+                els.sidebar.classList.remove('open');
+                els.sidebarOverlay.classList.remove('open');
+                setTimeout(() => els.sidebarOverlay.classList.add('hidden'), 250);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ==================== 事件绑定 ====================
+        function bindEvents() {
+            // 设置
+            els.btnSettings.addEventListener('click', () => openModal('settingsModal'));
+            els.closeSettings.addEventListener('click', () => closeModal('settingsModal'));
+            els.btnSaveSettings.addEventListener('click', () => {
+                saveConfig();
+                closeModal('settingsModal');
+                loadFileTree();
+            });
+            els.btnTestConnection.addEventListener('click', async () => {
+                const tempApi = new GitHubAPI(
+                    els.inputToken.value.trim(),
+                    els.inputOwner.value.trim(),
+                    els.inputRepo.value.trim(),
+                    els.inputBranch.value.trim()
+                );
+                try {
+                    await tempApi.testConnection();
+                    showToast('连接成功！', 'success');
+                } catch (err) {
+                    showToast(err.message, 'error');
+                }
+            });
+
+            // 工具栏
+            els.btnRefresh.addEventListener('click', loadFileTree);
+            els.btnSave.addEventListener('click', saveFile);
+            
+            // 新建文件
+            els.btnNewFile.addEventListener('click', () => openModal('newFileModal'));
+            els.btnCancelNewFile.addEventListener('click', () => closeModal('newFileModal'));
+            els.btnConfirmNewFile.addEventListener('click', createNewFile);
+            els.inputNewFilePath.addEventListener('keypress', (e) => { if (e.key === 'Enter') createNewFile(); });
+
+            // 上传
+            els.btnUpload.addEventListener('click', () => openModal('uploadModal'));
+            els.btnCancelUpload.addEventListener('click', () => { closeModal('uploadModal'); resetUpload(); });
+            els.btnConfirmUpload.addEventListener('click', handleUpload);
+            els.dropZone.addEventListener('click', () => els.fileInput.click());
+            els.dropZone.addEventListener('dragover', (e) => { e.preventDefault(); els.dropZone.classList.add('border-blue-500', 'bg-blue-500/10'); });
+            els.dropZone.addEventListener('dragleave', () => { els.dropZone.classList.remove('border-blue-500', 'bg-blue-500/10'); });
+            els.dropZone.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                els.dropZone.classList.remove('border-blue-500', 'bg-blue-500/10');
+                if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files[0]);
+            });
+            els.fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFileSelect(e.target.files[0]); });
+
+            // 右键菜单
+            els.ctxDelete.addEventListener('click', () => { if (contextMenuTarget) deleteFile(contextMenuTarget); hideContextMenu(); });
+            els.ctxRename.addEventListener('click', () => { hideContextMenu(); showToast('重命名功能暂未实现，建议下载后删除再上传', 'error'); });
+            document.addEventListener('click', hideContextMenu);
+
+            // 快捷键
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                    e.preventDefault();
+                    if (!els.btnSave.disabled) saveFile();
+                }
+            });
+
+            // 窗口大小变化时重新评估编辑器
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    if (editor) editor.layout();
+                }, 200);
+            });
+        }
+
+        // ==================== 初始化 ====================
+        function init() {
+            bindEvents();
+            if (loadConfig()) {
+                saveConfig();
+                loadFileTree();
+            } else {
+                openModal('settingsModal');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
