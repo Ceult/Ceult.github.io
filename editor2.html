@@ -204,7 +204,7 @@
 
 <script type="module">
   // ============================================================
-  // 1. 导入 CodeMirror 核心及扩展（使用 jsdelivr ESM，更稳定）
+  // 1. 导入 CodeMirror 核心及扩展（使用固定版本，确保兼容）
   // ============================================================
   import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightSpecialChars } from "https://cdn.jsdelivr.net/npm/@codemirror/view@6.36.4/+esm";
   import { EditorState, Compartment } from "https://cdn.jsdelivr.net/npm/@codemirror/state@6.5.2/+esm";
@@ -407,7 +407,7 @@ function hello() {
 </body>
 </html>`;
 
-  // ========== 自定义高亮样式 ==========
+  // ========== 自定义高亮样式（使用 HighlightStyle 和 tags） ==========
   const customHighlightStyle = HighlightStyle.define([
     { tag: tags.keyword, color: '#ff7b72' },
     { tag: tags.operator, color: '#d2a8ff' },
@@ -472,7 +472,7 @@ function hello() {
     return { view, setContent: (content) => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } }) };
   }
 
-  // ========== Monaco 加载（可选，保留作为增强） ==========
+  // ========== Monaco 加载（可选） ==========
   let monacoLoaded = false, monacoInstance = null, monacoLoadError = false;
   function loadMonaco() {
     return new Promise((resolve, reject) => {
@@ -527,6 +527,7 @@ function hello() {
       const originalContents = ref(new Map());
       const editorContainer = ref(null);
       let monacoEditor = null, cmEditor = null;
+      let editorInitTimer = null; // 超时定时器
       const newFileModal = ref(false), newFileName = ref(''), newFileTemplate = ref('html-basic'), newFileWithMarkdown = ref(true);
       const deleteConfirm = ref(null), renameModal = ref(null), renameValue = ref('');
       const showPreview = ref(false);
@@ -594,11 +595,11 @@ function hello() {
         await nextTick();
         initEditor(item.path);
       }
-      // ---------- 编辑器初始化（增强版） ----------
+
+      // ---------- 编辑器初始化（增强版，带超时保护） ----------
       function initEditor(path) {
         const container = editorContainer.value;
         if (!container) {
-          console.error('Editor container not found');
           toast('编辑器容器未就绪，请刷新重试', 'error');
           return;
         }
@@ -608,13 +609,24 @@ function hello() {
         // 清空容器
         container.innerHTML = '';
 
-        // 尝试使用 Monaco（桌面端）
-        const useMonaco = !isMobile.value;
-        editorType.value = useMonaco ? 'monaco' : 'codemirror';
-
         // 清理旧编辑器
         if (monacoEditor) { monacoEditor.dispose(); monacoEditor = null; }
         if (cmEditor) { cmEditor.view.destroy(); cmEditor = null; }
+        if (editorInitTimer) { clearTimeout(editorInitTimer); editorInitTimer = null; }
+
+        // 设置超时保护：若 3 秒后编辑器仍未创建成功，则降级为文本域
+        let editorCreated = false;
+        editorInitTimer = setTimeout(() => {
+          if (!editorCreated) {
+            console.warn('编辑器初始化超时，降级为纯文本域');
+            fallbackToTextarea(container, content, path);
+            toast('编辑器加载超时，使用纯文本模式', 'warn');
+          }
+        }, 3000);
+
+        // 尝试使用 Monaco（桌面端）
+        const useMonaco = !isMobile.value;
+        editorType.value = useMonaco ? 'monaco' : 'codemirror';
 
         if (useMonaco) {
           loadMonaco().then(monaco => {
@@ -642,22 +654,28 @@ function hello() {
                 if (tab) tab.unsaved = val !== originalContents.value.get(path);
               });
               monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveCurrent());
+              editorCreated = true;
+              clearTimeout(editorInitTimer);
             } catch (err) {
               console.error('Monaco create error:', err);
-              fallbackToCodeMirror(container, content, filename, path);
+              if (!editorCreated) {
+                fallbackToCodeMirror(container, content, filename, path, () => { editorCreated = true; clearTimeout(editorInitTimer); });
+              }
             }
           }).catch(err => {
             console.warn('Monaco load failed, fallback to CodeMirror:', err);
-            toast('Monaco 加载失败，使用 CodeMirror', 'warn');
-            fallbackToCodeMirror(container, content, filename, path);
+            if (!editorCreated) {
+              toast('Monaco 加载失败，使用 CodeMirror', 'warn');
+              fallbackToCodeMirror(container, content, filename, path, () => { editorCreated = true; clearTimeout(editorInitTimer); });
+            }
           });
         } else {
           // 直接使用 CodeMirror
-          fallbackToCodeMirror(container, content, filename, path);
+          fallbackToCodeMirror(container, content, filename, path, () => { editorCreated = true; clearTimeout(editorInitTimer); });
         }
       }
 
-      function fallbackToCodeMirror(container, content, filename, path) {
+      function fallbackToCodeMirror(container, content, filename, path, onSuccess) {
         try {
           cmEditor = createCodeMirrorEditor(container, content, filename, (val) => {
             fileContents.value.set(path, val);
@@ -665,26 +683,33 @@ function hello() {
             if (tab) tab.unsaved = val !== originalContents.value.get(path);
           });
           editorType.value = 'codemirror';
+          if (onSuccess) onSuccess();
         } catch (err) {
           console.error('CodeMirror init error:', err);
-          // 终极后备：显示一个文本域
-          container.innerHTML = `<textarea class="fallback-textarea" spellcheck="false">${content}</textarea>`;
-          const textarea = container.querySelector('textarea');
-          textarea.addEventListener('input', () => {
-            const val = textarea.value;
-            fileContents.value.set(path, val);
-            const tab = tabs.value.find(t => t.path === path);
-            if (tab) tab.unsaved = val !== originalContents.value.get(path);
-          });
-          editorType.value = 'fallback';
+          fallbackToTextarea(container, content, path);
           toast('编辑器加载失败，使用纯文本模式', 'error');
+          if (onSuccess) onSuccess(); // 也要清除超时
         }
+      }
+
+      function fallbackToTextarea(container, content, path) {
+        container.innerHTML = `<textarea class="fallback-textarea" spellcheck="false">${content}</textarea>`;
+        const textarea = container.querySelector('textarea');
+        textarea.addEventListener('input', () => {
+          const val = textarea.value;
+          fileContents.value.set(path, val);
+          const tab = tabs.value.find(t => t.path === path);
+          if (tab) tab.unsaved = val !== originalContents.value.get(path);
+        });
+        editorType.value = 'fallback';
+        // 清除超时
+        if (editorInitTimer) { clearTimeout(editorInitTimer); editorInitTimer = null; }
       }
 
       function switchTab(path) { activePath.value = path; nextTick(() => initEditor(path)); }
       function closeTab(path) { const tab = tabs.value.find(t => t.path === path); if (tab && tab.unsaved && !confirm('文件有未保存的更改，确定要关闭吗？')) return; tabs.value = tabs.value.filter(t => t.path !== path); fileContents.value.delete(path); originalContents.value.delete(path); if (activePath.value === path) { activePath.value = tabs.value.length ? tabs.value[tabs.value.length - 1].path : ''; if (activePath.value) nextTick(() => initEditor(activePath.value)); } }
 
-      // ★★★★★ 保存函数（与之前相同，已修复冲突处理） ★★★★★
+      // ★★★★★ 保存函数（已修复冲突处理） ★★★★★
       async function saveCurrent() {
         if (!canSave.value) return;
         const tab = tabs.value.find(t => t.path === activePath.value);
@@ -766,7 +791,7 @@ function hello() {
       function handleGlobalSave(e) { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (canSave.value) saveCurrent(); } }
 
       onMounted(() => { initAPI(); if (api.value) refreshTree(); else showSettings.value = true; window.addEventListener('resize', onResize); window.addEventListener('keydown', handleGlobalSave); });
-      onUnmounted(() => { window.removeEventListener('resize', onResize); window.removeEventListener('keydown', handleGlobalSave); if (monacoEditor) monacoEditor.dispose(); if (cmEditor) cmEditor.view.destroy(); });
+      onUnmounted(() => { window.removeEventListener('resize', onResize); window.removeEventListener('keydown', handleGlobalSave); if (monacoEditor) monacoEditor.dispose(); if (cmEditor) cmEditor.view.destroy(); if (editorInitTimer) clearTimeout(editorInitTimer); });
 
       return { settings, showSettings, saveSettings, closeSettingsWithoutRefresh, isMobile, sidebarOpen, toggleSidebar, loading, toasts, editorType, tree, searchQuery, filteredTree, updateFilteredTree, refreshTree, tabs, activePath, canSave, openFile, closeTab, saveCurrent, switchTab, newFileModal, newFileName, newFileTemplate, newFileWithMarkdown, showNewFileModal, createNewFile, deleteConfirm, confirmDelete, doDelete, renameModal, renameValue, showRenameModal, doRename, isHtmlFile, isMarkdownFile, previewHtml, showPreview, editorContainer, getLanguageLabel };
     }
