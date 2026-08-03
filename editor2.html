@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Posts Editor · 专业文章编辑器</title>
+  <!-- 内置图标，避免 favicon 404 -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext x='0' y='12' fill='%2358a6ff'%3E📝%3C/text%3E%3C/svg%3E">
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
@@ -85,6 +86,7 @@
       .preview-pane { display: none; }
       .preview-pane.show { display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--bg); border: none; }
     }
+    /* CodeMirror 自定义暗色主题 (完全自包含) */
     .cm-editor { background: var(--bg) !important; }
     .cm-gutters { background: var(--bg2) !important; border-right: 1px solid var(--border) !important; }
     .cm-lineNumbers { color: var(--text2) !important; }
@@ -230,7 +232,7 @@
     async deleteFile(path, sha, message) { return this.request(`${this.base}/contents/${path}`, { method: 'DELETE', body: JSON.stringify({ message: message || `Delete ${path}`, sha, branch: this.branch }) }); }
   }
 
-  // HTML 模板
+  // HTML 模板 (完整保留)
   const HTML_TEMPLATE_BASIC = (opts = {}) => `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -588,7 +590,7 @@ function hello() {
       function switchTab(path) { activePath.value = path; nextTick(() => initEditor(path)); }
       function closeTab(path) { const tab = tabs.value.find(t => t.path === path); if (tab && tab.unsaved && !confirm('文件有未保存的更改，确定要关闭吗？')) return; tabs.value = tabs.value.filter(t => t.path !== path); fileContents.value.delete(path); originalContents.value.delete(path); if (activePath.value === path) { activePath.value = tabs.value.length ? tabs.value[tabs.value.length - 1].path : ''; if (activePath.value) nextTick(() => initEditor(activePath.value)); } }
       
-      // ★★★ 修复后的保存函数 ★★★
+      // ---------- 修复的核心：保存函数（处理 sha 冲突） ----------
       async function saveCurrent() {
         if (!canSave.value) return;
         const tab = tabs.value.find(t => t.path === activePath.value);
@@ -598,30 +600,36 @@ function hello() {
           const content = fileContents.value.get(activePath.value);
           let latestSha = tab.sha;
           let remoteContent = null;
+          let fileExists = true;
 
-          // 尝试获取远程最新文件信息
+          // 1. 先尝试获取远程最新文件信息
           try {
             const fileInfo = await api.value.getFile(activePath.value);
             latestSha = fileInfo.sha;
             remoteContent = fileInfo.content;
           } catch (e) {
-            // 文件不存在（404），执行创建
             if (e.message.includes('404') || e.message.includes('Not Found')) {
-              await api.value.createFile(activePath.value, content);
-              originalContents.value.set(activePath.value, content);
-              tab.unsaved = false;
-              const newFile = await api.value.getFile(activePath.value);
-              tab.sha = newFile.sha;
-              toast('保存成功（新建）');
-              loading.value = false;
-              return;
+              fileExists = false;
             } else {
               throw e;
             }
           }
 
-          // 如果文件存在，比较本地与远程内容
+          // 2. 如果文件不存在，直接创建
+          if (!fileExists) {
+            await api.value.createFile(activePath.value, content);
+            originalContents.value.set(activePath.value, content);
+            tab.unsaved = false;
+            const newFile = await api.value.getFile(activePath.value);
+            tab.sha = newFile.sha;
+            toast('保存成功（新建）');
+            loading.value = false;
+            return;
+          }
+
+          // 3. 文件存在，比较内容
           if (remoteContent !== null && remoteContent !== content) {
+            // 内容不一致，存在冲突，询问用户
             const confirmOverwrite = confirm(
               `远程文件已被修改，是否用您当前的内容覆盖？\n\n点击“确定”覆盖远程内容，点击“取消”放弃保存。`
             );
@@ -630,12 +638,18 @@ function hello() {
               loading.value = false;
               return;
             }
+          } else if (remoteContent === content) {
+            // 内容完全相同，无需更新
+            toast('文件内容未改变，无需保存', 'warn');
+            loading.value = false;
+            return;
           }
 
-          // 执行更新（使用最新获取的 sha）
+          // 4. 执行更新（使用最新获取的 sha）
           await api.value.updateFile(activePath.value, content, latestSha);
           originalContents.value.set(activePath.value, content);
           tab.unsaved = false;
+          // 再次获取最新的 sha 并更新到 tab
           const updatedFile = await api.value.getFile(activePath.value);
           tab.sha = updatedFile.sha;
           toast('保存成功');
@@ -666,4 +680,4 @@ function hello() {
   }).mount('#app');
 </script>
 </body>
-</html>
+  </html>
