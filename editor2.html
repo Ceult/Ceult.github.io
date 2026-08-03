@@ -8,7 +8,7 @@
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
   <style>
-    /* ---------- 样式完全保留，与之前一致 ---------- */
+    /* ===== 样式与之前一致，略作精简 ===== */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root { --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d; --text: #c9d1d9; --text2: #8b949e; --accent: #58a6ff; --accent2: #238636; --danger: #f85149; --warn: #f0883e; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; -webkit-tap-highlight-color: transparent; }
@@ -98,7 +98,6 @@
     .cm-tooltip-autocomplete { background: var(--bg2) !important; }
     .cm-completionLabel { color: var(--text) !important; }
     .cm-completionDetail { color: var(--text2) !important; }
-    /* 后备文本域样式 */
     .fallback-textarea { width: 100%; height: 100%; background: var(--bg); color: var(--text); border: none; padding: 16px; font-family: 'SF Mono', Monaco, monospace; font-size: 14px; resize: none; outline: none; }
   </style>
 </head>
@@ -204,7 +203,7 @@
 
 <script type="module">
   // ============================================================
-  // 1. 导入 CodeMirror 核心及扩展（使用固定版本，确保兼容）
+  // 1. 导入 CodeMirror 及扩展（全部使用固定版本，稳定可靠）
   // ============================================================
   import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightSpecialChars } from "https://cdn.jsdelivr.net/npm/@codemirror/view@6.36.4/+esm";
   import { EditorState, Compartment } from "https://cdn.jsdelivr.net/npm/@codemirror/state@6.5.2/+esm";
@@ -407,7 +406,7 @@ function hello() {
 </body>
 </html>`;
 
-  // ========== 自定义高亮样式（使用 HighlightStyle 和 tags） ==========
+  // ========== 自定义高亮样式 ==========
   const customHighlightStyle = HighlightStyle.define([
     { tag: tags.keyword, color: '#ff7b72' },
     { tag: tags.operator, color: '#d2a8ff' },
@@ -442,8 +441,8 @@ function hello() {
     return markdown();
   }
 
-  // ========== CodeMirror 编辑器创建 ==========
-  function createCodeMirrorEditor(container, initialContent, filename, onChange) {
+  // ========== CodeMirror 编辑器工厂 ==========
+  function createEditor(container, content, filename, onChange) {
     const languageComp = new Compartment();
     const extensions = [
       lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), drawSelection(), dropCursor(),
@@ -468,35 +467,8 @@ function hello() {
         '.cm-completionDetail': { color: '#8b949e' },
       })
     ];
-    const view = new EditorView({ state: EditorState.create({ doc: initialContent, extensions }), parent: container });
-    return { view, setContent: (content) => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } }) };
-  }
-
-  // ========== Monaco 加载（可选） ==========
-  let monacoLoaded = false, monacoInstance = null, monacoLoadError = false;
-  function loadMonaco() {
-    return new Promise((resolve, reject) => {
-      if (monacoLoaded) { resolve(monacoInstance); return; }
-      if (monacoLoadError) { reject(new Error('Monaco previously failed')); return; }
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs/loader.min.js';
-      script.onload = () => {
-        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs' } });
-        window.MonacoEnvironment = { getWorkerUrl: () => `data:text/javascript;charset=utf-8,${encodeURIComponent(`self.MonacoEnvironment = { baseUrl: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/" }; importScripts("https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs/base/worker/workerMain.min.js");`)}` };
-        require(['vs/editor/editor.main'], function() { monacoLoaded = true; monacoInstance = monaco; resolve(monaco); }, (err) => { monacoLoadError = true; reject(err); });
-      };
-      script.onerror = () => { monacoLoadError = true; reject(new Error('Failed to load Monaco')); };
-      document.head.appendChild(script);
-    });
-  }
-  function getMonacoLanguage(filename) {
-    if (filename.endsWith('.md')) return 'markdown';
-    if (filename.endsWith('.html')) return 'html';
-    if (filename.endsWith('.js')) return 'javascript';
-    if (filename.endsWith('.ts')) return 'typescript';
-    if (filename.endsWith('.css')) return 'css';
-    if (filename.endsWith('.json')) return 'json';
-    return 'plaintext';
+    const view = new EditorView({ state: EditorState.create({ doc: content, extensions }), parent: container });
+    return view;
   }
 
   // ========== 树节点组件 ==========
@@ -517,7 +489,7 @@ function hello() {
       const sidebarOpen = ref(false);
       const loading = ref(false);
       const toasts = ref([]);
-      const editorType = ref('');
+      const editorType = ref('codemirror'); // 不再使用 Monaco
       const tree = ref([]);
       const searchQuery = ref('');
       const filteredTree = ref([]);
@@ -526,8 +498,7 @@ function hello() {
       const fileContents = ref(new Map());
       const originalContents = ref(new Map());
       const editorContainer = ref(null);
-      let monacoEditor = null, cmEditor = null;
-      let editorInitTimer = null; // 超时定时器
+      let cmView = null; // CodeMirror 视图实例
       const newFileModal = ref(false), newFileName = ref(''), newFileTemplate = ref('html-basic'), newFileWithMarkdown = ref(true);
       const deleteConfirm = ref(null), renameModal = ref(null), renameValue = ref('');
       const showPreview = ref(false);
@@ -571,145 +542,137 @@ function hello() {
           toast('加载失败: ' + e.message, 'error');
           tree.value = [];
           filteredTree.value = [];
-        } finally { loading.value = false; }
+        } finally {
+          loading.value = false;
+        }
       }
       function buildTree(items, depth = 0) { return items.map(item => ({ name: item.name, path: item.path, type: item.type, sha: item.sha, depth, expanded: false, hidden: false, children: item.type === 'dir' ? [] : null })).sort((a, b) => { if (a.type !== b.type) return a.type === 'dir' ? -1 : 1; return a.name.localeCompare(b.name); }); }
       function updateFilteredTree() { const query = searchQuery.value.toLowerCase().trim(); if (!query) { filteredTree.value = tree.value; return; } function filterItems(items) { return items.reduce((acc, item) => { const matches = item.name.toLowerCase().includes(query); let childMatches = []; if (item.children && item.children.length) childMatches = filterItems(item.children); if (matches || childMatches.length) { const copy = { ...item, children: childMatches.length ? childMatches : (item.children || null) }; if (matches && item.children && !childMatches.length) copy.children = []; acc.push(copy); } return acc; }, []); } filteredTree.value = filterItems(tree.value); }
+
+      // ---------- 打开文件 ----------
       async function openFile(item) {
         if (!api.value) { toast('未配置GitHub', 'error'); showSettings.value = true; return; }
         if (item.type === 'dir') {
           if (!item.expanded) {
             loading.value = true;
-            try { const data = await api.value.getContents(item.path); item.children = buildTree(data, item.depth + 1); } catch (e) { toast('加载目录失败: ' + e.message, 'error'); return; } finally { loading.value = false; }
+            try {
+              const data = await api.value.getContents(item.path);
+              item.children = buildTree(data, item.depth + 1);
+            } catch (e) {
+              toast('加载目录失败: ' + e.message, 'error');
+            } finally {
+              loading.value = false;
+            }
           }
           item.expanded = !item.expanded;
           updateFilteredTree();
           return;
         }
+
+        // 文件：如果尚未在 tabs 中，则加载内容
         if (!tabs.value.find(t => t.path === item.path)) {
           loading.value = true;
-          try { const file = await api.value.getFile(item.path); fileContents.value.set(item.path, file.content); originalContents.value.set(item.path, file.content); tabs.value.push({ path: item.path, name: item.name, sha: file.sha, unsaved: false }); } catch (e) { toast('加载文件失败: ' + e.message, 'error'); return; } finally { loading.value = false; }
+          try {
+            const file = await api.value.getFile(item.path);
+            fileContents.value.set(item.path, file.content);
+            originalContents.value.set(item.path, file.content);
+            tabs.value.push({ path: item.path, name: item.name, sha: file.sha, unsaved: false });
+          } catch (e) {
+            toast('加载文件失败: ' + e.message, 'error');
+            loading.value = false;
+            return;
+          } finally {
+            // 注意：这里不能直接关闭 loading，因为后面还要执行 initEditor，
+            // 但 initEditor 是同步的，所以在 initEditor 完成后关闭 loading。
+            // 但为了保险，我们在 initEditor 完成后统一关闭。
+          }
         }
+
         activePath.value = item.path;
         if (isMobile.value) sidebarOpen.value = false;
         await nextTick();
-        initEditor(item.path);
+        // 初始化编辑器
+        try {
+          initEditor(item.path);
+        } catch (e) {
+          toast('编辑器初始化失败: ' + e.message, 'error');
+        } finally {
+          loading.value = false; // 确保无论如何都会关闭 loading
+        }
       }
 
-      // ---------- 编辑器初始化（增强版，带超时保护） ----------
+      // ---------- 初始化编辑器（纯 CodeMirror） ----------
       function initEditor(path) {
         const container = editorContainer.value;
         if (!container) {
-          toast('编辑器容器未就绪，请刷新重试', 'error');
+          toast('编辑器容器未就绪', 'error');
           return;
         }
         const content = fileContents.value.get(path) || '';
         const filename = path.split('/').pop();
 
-        // 清空容器
-        container.innerHTML = '';
-
-        // 清理旧编辑器
-        if (monacoEditor) { monacoEditor.dispose(); monacoEditor = null; }
-        if (cmEditor) { cmEditor.view.destroy(); cmEditor = null; }
-        if (editorInitTimer) { clearTimeout(editorInitTimer); editorInitTimer = null; }
-
-        // 设置超时保护：若 3 秒后编辑器仍未创建成功，则降级为文本域
-        let editorCreated = false;
-        editorInitTimer = setTimeout(() => {
-          if (!editorCreated) {
-            console.warn('编辑器初始化超时，降级为纯文本域');
-            fallbackToTextarea(container, content, path);
-            toast('编辑器加载超时，使用纯文本模式', 'warn');
-          }
-        }, 3000);
-
-        // 尝试使用 Monaco（桌面端）
-        const useMonaco = !isMobile.value;
-        editorType.value = useMonaco ? 'monaco' : 'codemirror';
-
-        if (useMonaco) {
-          loadMonaco().then(monaco => {
-            try {
-              monacoEditor = monaco.editor.create(container, {
-                value: content,
-                language: getMonacoLanguage(filename),
-                theme: 'vs-dark',
-                fontSize: 14,
-                fontFamily: '"SF Mono", Monaco, monospace',
-                lineNumbers: 'on',
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-                tabSize: 2,
-                wordWrap: 'on',
-                renderWhitespace: 'selection',
-                bracketPairColorization: { enabled: true },
-                padding: { top: 16, bottom: 16 }
-              });
-              monacoEditor.onDidChangeModelContent(() => {
-                const val = monacoEditor.getValue();
-                fileContents.value.set(path, val);
-                const tab = tabs.value.find(t => t.path === path);
-                if (tab) tab.unsaved = val !== originalContents.value.get(path);
-              });
-              monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveCurrent());
-              editorCreated = true;
-              clearTimeout(editorInitTimer);
-            } catch (err) {
-              console.error('Monaco create error:', err);
-              if (!editorCreated) {
-                fallbackToCodeMirror(container, content, filename, path, () => { editorCreated = true; clearTimeout(editorInitTimer); });
-              }
-            }
-          }).catch(err => {
-            console.warn('Monaco load failed, fallback to CodeMirror:', err);
-            if (!editorCreated) {
-              toast('Monaco 加载失败，使用 CodeMirror', 'warn');
-              fallbackToCodeMirror(container, content, filename, path, () => { editorCreated = true; clearTimeout(editorInitTimer); });
-            }
-          });
-        } else {
-          // 直接使用 CodeMirror
-          fallbackToCodeMirror(container, content, filename, path, () => { editorCreated = true; clearTimeout(editorInitTimer); });
+        // 销毁旧编辑器
+        if (cmView) {
+          cmView.destroy();
+          cmView = null;
         }
-      }
+        container.innerHTML = ''; // 清空容器
 
-      function fallbackToCodeMirror(container, content, filename, path, onSuccess) {
         try {
-          cmEditor = createCodeMirrorEditor(container, content, filename, (val) => {
+          // 创建 CodeMirror 编辑器
+          cmView = createEditor(container, content, filename, (val) => {
             fileContents.value.set(path, val);
             const tab = tabs.value.find(t => t.path === path);
             if (tab) tab.unsaved = val !== originalContents.value.get(path);
           });
           editorType.value = 'codemirror';
-          if (onSuccess) onSuccess();
         } catch (err) {
           console.error('CodeMirror init error:', err);
-          fallbackToTextarea(container, content, path);
+          // 降级为纯文本域
+          container.innerHTML = `<textarea class="fallback-textarea" spellcheck="false">${content}</textarea>`;
+          const textarea = container.querySelector('textarea');
+          textarea.addEventListener('input', () => {
+            const val = textarea.value;
+            fileContents.value.set(path, val);
+            const tab = tabs.value.find(t => t.path === path);
+            if (tab) tab.unsaved = val !== originalContents.value.get(path);
+          });
+          editorType.value = 'fallback';
           toast('编辑器加载失败，使用纯文本模式', 'error');
-          if (onSuccess) onSuccess(); // 也要清除超时
         }
       }
 
-      function fallbackToTextarea(container, content, path) {
-        container.innerHTML = `<textarea class="fallback-textarea" spellcheck="false">${content}</textarea>`;
-        const textarea = container.querySelector('textarea');
-        textarea.addEventListener('input', () => {
-          const val = textarea.value;
-          fileContents.value.set(path, val);
-          const tab = tabs.value.find(t => t.path === path);
-          if (tab) tab.unsaved = val !== originalContents.value.get(path);
+      function switchTab(path) {
+        if (activePath.value === path) return;
+        activePath.value = path;
+        nextTick(() => {
+          try {
+            initEditor(path);
+          } catch (e) {
+            toast('切换编辑器失败: ' + e.message, 'error');
+          }
         });
-        editorType.value = 'fallback';
-        // 清除超时
-        if (editorInitTimer) { clearTimeout(editorInitTimer); editorInitTimer = null; }
       }
 
-      function switchTab(path) { activePath.value = path; nextTick(() => initEditor(path)); }
-      function closeTab(path) { const tab = tabs.value.find(t => t.path === path); if (tab && tab.unsaved && !confirm('文件有未保存的更改，确定要关闭吗？')) return; tabs.value = tabs.value.filter(t => t.path !== path); fileContents.value.delete(path); originalContents.value.delete(path); if (activePath.value === path) { activePath.value = tabs.value.length ? tabs.value[tabs.value.length - 1].path : ''; if (activePath.value) nextTick(() => initEditor(activePath.value)); } }
+      function closeTab(path) {
+        const tab = tabs.value.find(t => t.path === path);
+        if (tab && tab.unsaved && !confirm('文件有未保存的更改，确定要关闭吗？')) return;
+        tabs.value = tabs.value.filter(t => t.path !== path);
+        fileContents.value.delete(path);
+        originalContents.value.delete(path);
+        if (activePath.value === path) {
+          activePath.value = tabs.value.length ? tabs.value[tabs.value.length - 1].path : '';
+          if (activePath.value) {
+            nextTick(() => initEditor(activePath.value));
+          } else {
+            // 无 tab 时销毁编辑器
+            if (cmView) { cmView.destroy(); cmView = null; }
+            editorContainer.value.innerHTML = '';
+          }
+        }
+      }
 
-      // ★★★★★ 保存函数（已修复冲突处理） ★★★★★
+      // ---------- 保存（含冲突处理） ----------
       async function saveCurrent() {
         if (!canSave.value) return;
         const tab = tabs.value.find(t => t.path === activePath.value);
@@ -726,15 +689,15 @@ function hello() {
             const fileInfo = await api.value.getFile(activePath.value);
             tab.sha = fileInfo.sha;
             toast('保存成功');
-            loading.value = false;
-            return;
           } catch (err) {
             if (err.message && (err.message.includes('sha') || err.message.includes('does not match'))) {
+              // 获取远程最新版本
               let fileInfo;
               try {
                 fileInfo = await api.value.getFile(activePath.value);
               } catch (e) {
                 if (e.message.includes('404') || e.message.includes('Not Found')) {
+                  // 文件不存在，创建
                   await api.value.createFile(activePath.value, content);
                   originalContents.value.set(activePath.value, content);
                   tab.unsaved = false;
@@ -752,8 +715,6 @@ function hello() {
                 originalContents.value.set(activePath.value, content);
                 tab.unsaved = false;
                 toast('已同步（内容相同）');
-                loading.value = false;
-                return;
               } else {
                 if (confirm(`远程文件已被修改，是否用您当前的内容覆盖？\n\n点击“确定”覆盖远程内容，点击“取消”放弃保存。`)) {
                   await api.value.updateFile(activePath.value, content, remoteSha);
@@ -761,15 +722,13 @@ function hello() {
                   tab.unsaved = false;
                   tab.sha = remoteSha;
                   toast('保存成功（覆盖）');
-                  loading.value = false;
-                  return;
                 } else {
                   toast('已取消保存', 'warn');
-                  loading.value = false;
-                  return;
                 }
               }
-            } else throw err;
+            } else {
+              throw err;
+            }
           }
         } catch (e) {
           toast('保存失败: ' + e.message, 'error');
@@ -778,22 +737,130 @@ function hello() {
         }
       }
 
+      // ---------- 新建文件 ----------
       function showNewFileModal() { if (!api.value) { showSettings.value = true; toast('请先配置 GitHub 仓库', 'warn'); return; } newFileName.value = ''; newFileTemplate.value = 'html-basic'; newFileWithMarkdown.value = true; newFileModal.value = true; }
-      async function createNewFile() { const name = newFileName.value.trim(); if (!name) return; const path = settings.value.postsPath + '/' + name; let content = ''; if (name.endsWith('.html')) { const opts = { title: name.replace('.html', ''), customCss: settings.value.customCss, customJs: settings.value.customJs, withMarkdown: newFileWithMarkdown.value }; if (newFileTemplate.value === 'html-basic') content = HTML_TEMPLATE_BASIC(opts); else if (newFileTemplate.value === 'html-blog') content = HTML_TEMPLATE_BLOG(opts); else content = `<!DOCTYPE html><html><head><title>${opts.title}</title></head><body></body></html>`; } else if (name.endsWith('.md')) { content = `# ${name.replace('.md', '')}\n\n开始书写你的文章...\n\n## 二级标题\n\n- 列表项\n- 示例 **加粗**\n\n\`\`\`javascript\nconsole.log("Hello Markdown");\n\`\`\``; } else { content = ''; }
-        loading.value = true; try { await api.value.createFile(path, content); newFileModal.value = false; toast('文件创建成功'); refreshTree(); fileContents.value.set(path, content); originalContents.value.set(path, content); tabs.value.push({ path, name, sha: null, unsaved: false }); activePath.value = path; nextTick(() => initEditor(path)); } catch (e) { toast('创建失败: ' + e.message, 'error'); } finally { loading.value = false; } }
+      async function createNewFile() {
+        const name = newFileName.value.trim();
+        if (!name) return;
+        const path = settings.value.postsPath + '/' + name;
+        let content = '';
+        if (name.endsWith('.html')) {
+          const opts = { title: name.replace('.html', ''), customCss: settings.value.customCss, customJs: settings.value.customJs, withMarkdown: newFileWithMarkdown.value };
+          if (newFileTemplate.value === 'html-basic') content = HTML_TEMPLATE_BASIC(opts);
+          else if (newFileTemplate.value === 'html-blog') content = HTML_TEMPLATE_BLOG(opts);
+          else content = `<!DOCTYPE html><html><head><title>${opts.title}</title></head><body></body></html>`;
+        } else if (name.endsWith('.md')) {
+          content = `# ${name.replace('.md', '')}\n\n开始书写你的文章...\n\n## 二级标题\n\n- 列表项\n- 示例 **加粗**\n\n\`\`\`javascript\nconsole.log("Hello Markdown");\n\`\`\``;
+        } else {
+          content = '';
+        }
+        loading.value = true;
+        try {
+          await api.value.createFile(path, content);
+          newFileModal.value = false;
+          toast('文件创建成功');
+          await refreshTree();
+          fileContents.value.set(path, content);
+          originalContents.value.set(path, content);
+          tabs.value.push({ path, name, sha: null, unsaved: false });
+          activePath.value = path;
+          await nextTick();
+          initEditor(path);
+        } catch (e) {
+          toast('创建失败: ' + e.message, 'error');
+        } finally {
+          loading.value = false;
+        }
+      }
+
+      // ---------- 删除 & 重命名 ----------
       function confirmDelete(item) { deleteConfirm.value = item; }
-      async function doDelete() { if (!deleteConfirm.value) return; const item = deleteConfirm.value; loading.value = true; try { await api.value.deleteFile(item.path, item.sha); deleteConfirm.value = null; toast('删除成功'); refreshTree(); closeTab(item.path); } catch (e) { toast('删除失败: ' + e.message, 'error'); } finally { loading.value = false; } }
+      async function doDelete() {
+        if (!deleteConfirm.value) return;
+        const item = deleteConfirm.value;
+        loading.value = true;
+        try {
+          await api.value.deleteFile(item.path, item.sha);
+          deleteConfirm.value = null;
+          toast('删除成功');
+          await refreshTree();
+          closeTab(item.path);
+        } catch (e) {
+          toast('删除失败: ' + e.message, 'error');
+        } finally {
+          loading.value = false;
+        }
+      }
       function showRenameModal(item) { renameModal.value = item; renameValue.value = item.name; }
-      async function doRename() { if (!renameModal.value || !renameValue.value.trim()) return; const item = renameModal.value; const newName = renameValue.value.trim(); if (newName === item.name) { renameModal.value = null; return; } const oldPath = item.path; const newPath = oldPath.substring(0, oldPath.lastIndexOf('/') + 1) + newName; loading.value = true; try { const file = await api.value.getFile(oldPath); await api.value.createFile(newPath, file.content); await api.value.deleteFile(oldPath, file.sha); renameModal.value = null; toast('重命名成功'); refreshTree(); const tab = tabs.value.find(t => t.path === oldPath); if (tab) { tab.path = newPath; tab.name = newName; } if (activePath.value === oldPath) activePath.value = newPath; } catch (e) { toast('重命名失败: ' + e.message, 'error'); } finally { loading.value = false; } }
-      function getLanguageLabel(path) { if (!path) return ''; if (path.endsWith('.md')) return 'Markdown'; if (path.endsWith('.html')) return 'HTML'; if (path.endsWith('.js')) return 'JavaScript'; if (path.endsWith('.css')) return 'CSS'; if (path.endsWith('.json')) return 'JSON'; return 'Plain Text'; }
+      async function doRename() {
+        if (!renameModal.value || !renameValue.value.trim()) return;
+        const item = renameModal.value;
+        const newName = renameValue.value.trim();
+        if (newName === item.name) { renameModal.value = null; return; }
+        const oldPath = item.path;
+        const newPath = oldPath.substring(0, oldPath.lastIndexOf('/') + 1) + newName;
+        loading.value = true;
+        try {
+          const file = await api.value.getFile(oldPath);
+          await api.value.createFile(newPath, file.content);
+          await api.value.deleteFile(oldPath, file.sha);
+          renameModal.value = null;
+          toast('重命名成功');
+          await refreshTree();
+          const tab = tabs.value.find(t => t.path === oldPath);
+          if (tab) { tab.path = newPath; tab.name = newName; }
+          if (activePath.value === oldPath) activePath.value = newPath;
+        } catch (e) {
+          toast('重命名失败: ' + e.message, 'error');
+        } finally {
+          loading.value = false;
+        }
+      }
+
+      function getLanguageLabel(path) {
+        if (!path) return '';
+        if (path.endsWith('.md')) return 'Markdown';
+        if (path.endsWith('.html')) return 'HTML';
+        if (path.endsWith('.js')) return 'JavaScript';
+        if (path.endsWith('.css')) return 'CSS';
+        if (path.endsWith('.json')) return 'JSON';
+        return 'Plain Text';
+      }
       function toggleSidebar() { sidebarOpen.value = !sidebarOpen.value; }
-      function onResize() { const wasMobile = isMobile.value; isMobile.value = window.innerWidth <= 768; if (wasMobile !== isMobile.value && activePath.value) nextTick(() => initEditor(activePath.value)); if (monacoEditor) monacoEditor.layout(); }
-      function handleGlobalSave(e) { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (canSave.value) saveCurrent(); } }
+      function onResize() {
+        if (cmView) cmView.requestMeasure();
+      }
+      function handleGlobalSave(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+          e.preventDefault();
+          if (canSave.value) saveCurrent();
+        }
+      }
 
-      onMounted(() => { initAPI(); if (api.value) refreshTree(); else showSettings.value = true; window.addEventListener('resize', onResize); window.addEventListener('keydown', handleGlobalSave); });
-      onUnmounted(() => { window.removeEventListener('resize', onResize); window.removeEventListener('keydown', handleGlobalSave); if (monacoEditor) monacoEditor.dispose(); if (cmEditor) cmEditor.view.destroy(); if (editorInitTimer) clearTimeout(editorInitTimer); });
+      onMounted(() => {
+        initAPI();
+        if (api.value) refreshTree();
+        else showSettings.value = true;
+        window.addEventListener('resize', onResize);
+        window.addEventListener('keydown', handleGlobalSave);
+      });
+      onUnmounted(() => {
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('keydown', handleGlobalSave);
+        if (cmView) cmView.destroy();
+      });
 
-      return { settings, showSettings, saveSettings, closeSettingsWithoutRefresh, isMobile, sidebarOpen, toggleSidebar, loading, toasts, editorType, tree, searchQuery, filteredTree, updateFilteredTree, refreshTree, tabs, activePath, canSave, openFile, closeTab, saveCurrent, switchTab, newFileModal, newFileName, newFileTemplate, newFileWithMarkdown, showNewFileModal, createNewFile, deleteConfirm, confirmDelete, doDelete, renameModal, renameValue, showRenameModal, doRename, isHtmlFile, isMarkdownFile, previewHtml, showPreview, editorContainer, getLanguageLabel };
+      return {
+        settings, showSettings, saveSettings, closeSettingsWithoutRefresh,
+        isMobile, sidebarOpen, toggleSidebar, loading, toasts, editorType,
+        tree, searchQuery, filteredTree, updateFilteredTree, refreshTree,
+        tabs, activePath, canSave, openFile, closeTab, saveCurrent, switchTab,
+        newFileModal, newFileName, newFileTemplate, newFileWithMarkdown,
+        showNewFileModal, createNewFile, deleteConfirm, confirmDelete, doDelete,
+        renameModal, renameValue, showRenameModal, doRename,
+        isHtmlFile, isMarkdownFile, previewHtml, showPreview,
+        editorContainer, getLanguageLabel
+      };
     }
   }).mount('#app');
 </script>
