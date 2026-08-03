@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>aaa</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <link rel="stylesheet" href="">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>aaa</h1>
+    <markdown>
+  <pre>
+# 在这里写 Markdown
+# 大标题
+## 中标题
+### 小标题
+#### 4
+##### 5
+###### 6
+- 列表项
+- **粗体** 和 *斜体* ***111***
+<p style="display:none">aaa</p>
+> 引用块
+```javascript
+const hello = "world";
+```
+  </pre>
+</markdown>
+  </div>
+
+  <script src=""></script>
+  <script>
+    // Markdown Component with Web Worker
+    (function() {
+      let worker = null;
+      let workerId = 0;
+      const callbacks = new Map();
+
+      function getWorker() {
+        if (!worker) {
+          const workerCode = `
+            importScripts('https://cdn.jsdelivr.net/npm/markdown-it@14/dist/markdown-it.min.js');
+            const md = markdownit({ html: true, linkify: true, typographer: true });
+            self.onmessage = function(e) {
+              const { id, content } = e.data;
+              const html = md.render(content);
+              self.postMessage({ id, html });
+            };
+          `;
+          const blob = new Blob([workerCode], { type: 'application/javascript' });
+          worker = new Worker(URL.createObjectURL(blob));
+          worker.onmessage = function(e) {
+            const cb = callbacks.get(e.data.id);
+            if (cb) { cb(e.data.html); callbacks.delete(e.data.id); }
+          };
+        }
+        return worker;
+      }
+
+      function renderMarkdown(content, callback) {
+        const id = ++workerId;
+        callbacks.set(id, callback);
+        getWorker().postMessage({ id, content });
+      }
+
+      function dedent(str) {
+        const lines = str.split('\n');
+        const min = lines
+          .filter(l => l.trim())
+          .map(l => l.match(/^s*/)[0].length)
+          .reduce((a, b) => Math.min(a, b), Infinity);
+        return lines
+          .map(l => l.slice(min))
+          .join('\n')
+          .trim();
+      }
+
+      const Markdown = {
+        template: '<div class="markdown-body" v-html="renderedHtml"></div>',
+        data() { return { renderedHtml: '' }; },
+        mounted() {
+          const raw = this.extractContent();
+          const clean = dedent(raw);
+          renderMarkdown(clean, (html) => { this.renderedHtml = html; });
+        },
+        methods: {
+          extractContent() {
+            const slot = this.$slots.default?.();
+            if (!slot) return '';
+            const pre = slot.find(v => v.type === 'pre');
+            if (!pre) return '';
+            const extract = (nodes) => {
+              if (typeof nodes === 'string') return nodes;
+              if (Array.isArray(nodes)) return nodes.map(extract).join('');
+              if (nodes.children) return extract(nodes.children);
+              return '';
+            };
+            return extract(pre.children);
+          }
+        }
+      };
+
+      const { createApp } = Vue;
+      createApp({ components: { markdown: Markdown } }).mount('#app');
+    })();
+  </script>
+</body>
+</html>
