@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Posts Editor · 专业文章编辑器</title>
-  <!-- 内置图标，避免 favicon 404 -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext x='0' y='12' fill='%2358a6ff'%3E📝%3C/text%3E%3C/svg%3E">
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
   <style>
+    /* ---------- 样式保持不变，与之前相同 ---------- */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root { --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d; --text: #c9d1d9; --text2: #8b949e; --accent: #58a6ff; --accent2: #238636; --danger: #f85149; --warn: #f0883e; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; -webkit-tap-highlight-color: transparent; }
@@ -86,7 +86,6 @@
       .preview-pane { display: none; }
       .preview-pane.show { display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--bg); border: none; }
     }
-    /* CodeMirror 自定义暗色主题 (完全自包含) */
     .cm-editor { background: var(--bg) !important; }
     .cm-gutters { background: var(--bg2) !important; border-right: 1px solid var(--border) !important; }
     .cm-lineNumbers { color: var(--text2) !important; }
@@ -102,6 +101,7 @@
 </head>
 <body>
 <div id="app">
+  <!-- 头部 -->
   <div class="header">
     <button class="btn small" @click="toggleSidebar" v-if="isMobile">☰</button>
     <h1>✍️ Posts Editor</h1>
@@ -111,7 +111,10 @@
     <button class="btn" @click="showSettings=true">⚙️ 设置</button>
     <button class="btn primary" @click="saveCurrent" :disabled="!canSave">💾 保存</button>
   </div>
+
+  <!-- 主体 -->
   <div class="main">
+    <!-- 侧边栏 -->
     <div class="sidebar" :class="{'mobile-hidden': isMobile && !sidebarOpen}">
       <div class="sidebar-header">
         <h2>📂 文件树</h2>
@@ -126,6 +129,8 @@
       <div v-else class="empty-state"><div>{{searchQuery ? '无匹配文件' : '暂无文件'}}</div><button v-if="!searchQuery" class="btn" @click="showSettings=true">配置仓库</button></div>
     </div>
     <div v-if="isMobile && sidebarOpen" class="mobile-overlay" @click="sidebarOpen=false"></div>
+
+    <!-- 编辑器区域 -->
     <div class="editor-area">
       <div class="editor-tabs" v-if="tabs.length">
         <div v-for="tab in tabs" :key="tab.path" class="tab" :class="{active: tab.path===activePath}" @click="switchTab(tab.path)">
@@ -146,7 +151,11 @@
       </div>
     </div>
   </div>
+
+  <!-- 加载遮罩 -->
   <div v-if="loading" class="loading-overlay"><div class="loading-spinner"></div></div>
+
+  <!-- 设置面板 -->
   <div v-if="showSettings" class="settings-panel">
     <div class="settings-box">
       <h2>⚙️ GitHub 设置</h2>
@@ -162,6 +171,8 @@
       <div class="settings-actions"><button class="btn" @click="closeSettingsWithoutRefresh">取消</button><button class="btn primary" @click="saveSettings">保存并连接</button></div>
     </div>
   </div>
+
+  <!-- 新建文件 -->
   <div v-if="newFileModal" class="modal-overlay">
     <div class="modal-box">
       <h3>📄 新建文件</h3>
@@ -173,16 +184,23 @@
       <div class="modal-actions"><button class="btn" @click="newFileModal=false">取消</button><button class="btn primary" @click="createNewFile" :disabled="!newFileName.trim()">创建</button></div>
     </div>
   </div>
+
+  <!-- 删除确认 -->
   <div v-if="deleteConfirm" class="modal-overlay">
     <div class="modal-box"><h3>🗑️ 确认删除</h3><div class="modal-body">确定要删除 <strong>{{deleteConfirm.name}}</strong> 吗？此操作不可撤销。</div><div class="modal-actions"><button class="btn" @click="deleteConfirm=null">取消</button><button class="btn danger" @click="doDelete">删除</button></div></div>
   </div>
+
+  <!-- 重命名 -->
   <div v-if="renameModal" class="modal-overlay">
     <div class="modal-box"><h3>✏️ 重命名</h3><div class="modal-body"><div class="field"><label>新名称</label><input v-model="renameValue" @keyup.enter="doRename"></div></div><div class="modal-actions"><button class="btn" @click="renameModal=null">取消</button><button class="btn primary" @click="doRename">重命名</button></div></div>
   </div>
+
+  <!-- Toast -->
   <div class="toast-container"><div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">{{t.message}}</div></div>
 </div>
 
 <script type="module">
+  // ========== 导入 CodeMirror 及依赖 ==========
   import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightSpecialChars } from "https://esm.sh/@codemirror/view@6.36.4";
   import { EditorState, Compartment } from "https://esm.sh/@codemirror/state@6.5.2";
   import { defaultKeymap, history, historyKeymap, indentWithTab } from "https://esm.sh/@codemirror/commands@6.8.0";
@@ -197,7 +215,7 @@
 
   const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
 
-  // 带超时的 fetch (10秒)
+  // ========== 工具函数：带超时的 fetch ==========
   async function fetchWithTimeout(url, options, timeout = 10000) {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
@@ -212,6 +230,7 @@
     }
   }
 
+  // ========== GitHub API 封装 ==========
   class GitHubAPI {
     constructor(token, owner, repo, branch) {
       this.token = token; this.owner = owner; this.repo = repo; this.branch = branch || 'main';
@@ -232,7 +251,7 @@
     async deleteFile(path, sha, message) { return this.request(`${this.base}/contents/${path}`, { method: 'DELETE', body: JSON.stringify({ message: message || `Delete ${path}`, sha, branch: this.branch }) }); }
   }
 
-  // HTML 模板 (完整保留)
+  // ========== HTML 模板（基础 & 博客） ==========
   const HTML_TEMPLATE_BASIC = (opts = {}) => `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -383,7 +402,7 @@ function hello() {
 </body>
 </html>`;
 
-  // 自定义高亮样式 (完全替代 oneDark)
+  // ========== CodeMirror 自定义高亮 & 编辑器初始化 ==========
   const customHighlightStyle = HighlightStyle.define([
     { tag: tags.keyword, color: '#ff7b72' },
     { tag: tags.operator, color: '#d2a8ff' },
@@ -446,6 +465,7 @@ function hello() {
     return { view, setContent: (content) => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } }) };
   }
 
+  // ========== Monaco 加载（可选） ==========
   let monacoLoaded = false, monacoInstance = null, monacoLoadError = false;
   function loadMonaco() {
     return new Promise((resolve, reject) => {
@@ -472,12 +492,14 @@ function hello() {
     return 'plaintext';
   }
 
+  // ========== 树节点组件 ==========
   const TreeItem = {
     props: ['item', 'activePath'], emits: ['open', 'delete', 'rename'],
     template: `<div><div class="tree-item" :class="{active: item.path===activePath, hidden: item.hidden}" :style="{'--depth': item.depth}" @click="item.type==='dir' ? toggle() : $emit('open', item)"><span class="icon">{{ item.type==='dir' ? (item.expanded ? '📂' : '📁') : getFileIcon(item.name) }}</span><span class="name">{{item.name}}</span><span class="actions" v-if="item.type!=='dir'" @click.stop><button class="btn-icon" @click="$emit('rename', item)">✏️</button><button class="btn-icon" @click="$emit('delete', item)">🗑️</button></span></div><div v-if="item.expanded && item.children"><tree-item v-for="child in item.children" :key="child.path" :item="child" :active-path="activePath" @open="$emit('open', $event)" @delete="$emit('delete', $event)" @rename="$emit('rename', $event)"/></div></div>`,
     setup(props) { const toggle = () => { props.item.expanded = !props.item.expanded; }; const getFileIcon = (name) => { if (name.endsWith('.md')) return '📝'; if (name.endsWith('.html')) return '🌐'; if (name.endsWith('.css')) return '🎨'; if (name.endsWith('.js')) return '⚡'; return '📄'; }; return { toggle, getFileIcon }; }
   };
 
+  // ========== Vue 应用 ==========
   createApp({
     components: { TreeItem },
     setup() {
@@ -589,8 +611,8 @@ function hello() {
       function initCodeMirror(content, filename, path) { cmEditor = createCodeMirrorEditor(editorContainer.value, content, filename, (val) => { fileContents.value.set(path, val); const tab = tabs.value.find(t => t.path === path); if (tab) tab.unsaved = val !== originalContents.value.get(path); }); }
       function switchTab(path) { activePath.value = path; nextTick(() => initEditor(path)); }
       function closeTab(path) { const tab = tabs.value.find(t => t.path === path); if (tab && tab.unsaved && !confirm('文件有未保存的更改，确定要关闭吗？')) return; tabs.value = tabs.value.filter(t => t.path !== path); fileContents.value.delete(path); originalContents.value.delete(path); if (activePath.value === path) { activePath.value = tabs.value.length ? tabs.value[tabs.value.length - 1].path : ''; if (activePath.value) nextTick(() => initEditor(activePath.value)); } }
-      
-      // ---------- 修复的核心：保存函数（处理 sha 冲突） ----------
+
+      // ★★★★★ 核心修复：全新的 saveCurrent 函数 ★★★★★
       async function saveCurrent() {
         if (!canSave.value) return;
         const tab = tabs.value.find(t => t.path === activePath.value);
@@ -598,61 +620,76 @@ function hello() {
         loading.value = true;
         try {
           const content = fileContents.value.get(activePath.value);
-          let latestSha = tab.sha;
-          let remoteContent = null;
-          let fileExists = true;
+          let currentSha = tab.sha;
 
-          // 1. 先尝试获取远程最新文件信息
+          // 尝试直接更新，如果失败且是 sha 冲突，则获取最新版本并处理
           try {
-            const fileInfo = await api.value.getFile(activePath.value);
-            latestSha = fileInfo.sha;
-            remoteContent = fileInfo.content;
-          } catch (e) {
-            if (e.message.includes('404') || e.message.includes('Not Found')) {
-              fileExists = false;
-            } else {
-              throw e;
-            }
-          }
-
-          // 2. 如果文件不存在，直接创建
-          if (!fileExists) {
-            await api.value.createFile(activePath.value, content);
+            await api.value.updateFile(activePath.value, content, currentSha);
+            // 成功：更新本地状态
             originalContents.value.set(activePath.value, content);
             tab.unsaved = false;
-            const newFile = await api.value.getFile(activePath.value);
-            tab.sha = newFile.sha;
-            toast('保存成功（新建）');
+            // 获取最新 sha
+            const fileInfo = await api.value.getFile(activePath.value);
+            tab.sha = fileInfo.sha;
+            toast('保存成功');
             loading.value = false;
             return;
-          }
+          } catch (err) {
+            // 判断是否为 sha 冲突（错误信息包含 "sha" 或 "does not match"）
+            if (err.message && (err.message.includes('sha') || err.message.includes('does not match'))) {
+              // 获取远程最新版本
+              let fileInfo;
+              try {
+                fileInfo = await api.value.getFile(activePath.value);
+              } catch (e) {
+                // 如果文件不存在（可能被删除），则尝试创建
+                if (e.message.includes('404') || e.message.includes('Not Found')) {
+                  await api.value.createFile(activePath.value, content);
+                  originalContents.value.set(activePath.value, content);
+                  tab.unsaved = false;
+                  const newFile = await api.value.getFile(activePath.value);
+                  tab.sha = newFile.sha;
+                  toast('保存成功（新建）');
+                  loading.value = false;
+                  return;
+                } else {
+                  throw e;
+                }
+              }
+              const remoteSha = fileInfo.sha;
+              const remoteContent = fileInfo.content;
 
-          // 3. 文件存在，比较内容
-          if (remoteContent !== null && remoteContent !== content) {
-            // 内容不一致，存在冲突，询问用户
-            const confirmOverwrite = confirm(
-              `远程文件已被修改，是否用您当前的内容覆盖？\n\n点击“确定”覆盖远程内容，点击“取消”放弃保存。`
-            );
-            if (!confirmOverwrite) {
-              toast('已取消保存', 'warn');
-              loading.value = false;
-              return;
+              // 比较内容
+              if (remoteContent === content) {
+                // 内容相同，直接同步 sha
+                tab.sha = remoteSha;
+                originalContents.value.set(activePath.value, content);
+                tab.unsaved = false;
+                toast('已同步（内容相同）');
+                loading.value = false;
+                return;
+              } else {
+                // 内容不同，询问是否覆盖
+                if (confirm(`远程文件已被修改，是否用您当前的内容覆盖？\n\n点击“确定”覆盖远程内容，点击“取消”放弃保存。`)) {
+                  // 用最新 sha 重试更新
+                  await api.value.updateFile(activePath.value, content, remoteSha);
+                  originalContents.value.set(activePath.value, content);
+                  tab.unsaved = false;
+                  tab.sha = remoteSha;
+                  toast('保存成功（覆盖）');
+                  loading.value = false;
+                  return;
+                } else {
+                  toast('已取消保存', 'warn');
+                  loading.value = false;
+                  return;
+                }
+              }
+            } else {
+              // 非 sha 冲突错误，直接抛出
+              throw err;
             }
-          } else if (remoteContent === content) {
-            // 内容完全相同，无需更新
-            toast('文件内容未改变，无需保存', 'warn');
-            loading.value = false;
-            return;
           }
-
-          // 4. 执行更新（使用最新获取的 sha）
-          await api.value.updateFile(activePath.value, content, latestSha);
-          originalContents.value.set(activePath.value, content);
-          tab.unsaved = false;
-          // 再次获取最新的 sha 并更新到 tab
-          const updatedFile = await api.value.getFile(activePath.value);
-          tab.sha = updatedFile.sha;
-          toast('保存成功');
         } catch (e) {
           toast('保存失败: ' + e.message, 'error');
         } finally {
@@ -680,4 +717,4 @@ function hello() {
   }).mount('#app');
 </script>
 </body>
-  </html>
+</html>
