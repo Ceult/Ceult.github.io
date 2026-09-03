@@ -1,0 +1,86 @@
+
+#doc {
+  position: fixed;
+  top: 0px;
+  left: 50%;
+  width: 90%;
+  height: 100%;
+  transform: translateX(-50%);
+  //background-color:yellow;
+  padding: 8px;
+  overflow: auto;
+  animation: start-doc 1s linear;
+}
+
+@keyframes start-doc {
+  0% { transform: translateY(50vw) translateX(-50%); opacity: 0; }
+  100% { transform: translateY(0px) translateX(-50%); opacity:1; }
+}
+
+#doc div.box {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.8); /* 半透明白色背景 */
+    border-radius: 8px;                  /* 圆角 */
+    margin-top: 8px;                    /* 上下间距 */
+    margin-bottom: 8px;
+    padding: 15px;                       /* 内边距 */
+    box-sizing: border-box;              /* 盒模型计算方式 */
+    
+    /* 可选增强效果 */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); /* 轻微阴影 */
+    backdrop-filter: blur(2px);          /* 毛玻璃效果（可选） */
+
+}
+
+#doc div.small_box {
+    //width: 100%;
+    background: rgba(255, 255, 255, 0.8); /* 半透明白色背景 */
+    border-radius: 6px;                  /* 圆角 */
+    margin-top: 8px;                    /* 上下间距 */
+    margin-bottom: 8px;
+    padding-right: 6px;                       /* 内边距 */
+    padding-left: 6px;
+    box-sizing: border-box;              /* 盒模型计算方式 */
+    display: inline-block;
+    
+    /* 可选增强效果 */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); /* 轻微阴影 */
+    backdrop-filter: blur(2px);          /* 毛玻璃效果（可选） */
+
+}
+
+#doc div.none{
+    width: 100%;
+    //background: rgba(255, 255, 255, 0.8); /* 半透明白色背景 */
+    //border-radius: 8px;                  /* 圆角 */
+    margin-top: 8px;                    /* 上下间距 */
+    margin-bottom: 8px;
+    padding: 0px 15px;                       /* 内边距 */
+    box-sizing: border-box;   
+}
+
+/* 走马灯容器样式 */
+#doc div.marquee {
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  //padding-left: 100%;
+  box-sizing: border-box;
+}
+
+/* 走马灯内部内容样式 */
+#doc div.marquee > * > * {
+  box-sizing: border-box;
+  margin-right: 15px;
+}
+
+#doc div.marquee > :first-child {
+  float: left;
+  animation: marquee 5s linear infinite;
+}
+
+/* 定义动画关键帧 */
+@keyframes marquee {
+  0% { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
